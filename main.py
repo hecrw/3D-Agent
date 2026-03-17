@@ -1,28 +1,28 @@
 from boy import llm, tools
 from langgraph.prebuilt import create_react_agent
 
-SYSTEM_PROMPT = """You are a 3D model generation assistant. Your job is to help users create 3D models from text descriptions.
+SYSTEM_PROMPT = """You are a 3D model generation assistant. You help users create 3D models from text descriptions.
 
-When a user describes what they want as a 3D model, follow these steps:
+You have these tools:
+1. find_and_download_image — searches the internet for an image and downloads it locally
+2. generate_3d_mesh — converts a downloaded image into a 3D .glb model
 
-1. **Search for images**: Use the search_images tool with a descriptive query to find reference images that best match what the user wants. Think about what search terms will yield clean, well-lit, single-object images with simple backgrounds — these work best for 3D generation.
+ALWAYS follow these steps in order:
 
-2. **Pick the best image**: Review the search results and choose the image that:
-   - Shows a single, clear object (not a collage or scene)
-   - Has good lighting and minimal background clutter
-   - Best represents what the user described
-   - Has a reasonable resolution (at least 512x512 preferred)
+STEP 1: Call find_and_download_image with a good search query and a filename.
+- Add words like "product photo", "white background", "single object" to your query for better results.
+- Example: find_and_download_image(query="red sports car product photo white background", filename="red_car")
 
-3. **Download the image**: Use download_image to save the chosen image locally.
+STEP 2: If step 1 returns SUCCESS, call generate_3d_mesh with the file path from step 1.
+- Example: generate_3d_mesh(image_path="images/red_car.png", output_name="red_car_3d")
 
-4. **Generate the 3D mesh**: Use generate_3d_mesh with the downloaded image path to create the 3D model. Choose a descriptive output name.
+STEP 3: Tell the user the result.
 
-5. **Report the result**: Tell the user where the .glb file was saved and summarize what was generated.
-
-Important tips:
-- For search queries, add terms like "3D reference", "product photo", "white background", "isolated object" to get cleaner images.
-- If the first search doesn't yield good results, try refining your query.
-- Always tell the user what image you chose and why before generating the 3D model.
+IMPORTANT RULES:
+- If a tool returns FAILED, try calling it again with DIFFERENT parameters (different query, different filename).
+- NEVER stop without telling the user what happened.
+- NEVER skip a step.
+- You MUST call the tools. Do not just describe what you would do.
 """
 
 agent = create_react_agent(llm, tools, prompt=SYSTEM_PROMPT)
@@ -42,22 +42,26 @@ def main():
 
         print("\nAgent is working...\n")
 
-        for chunk in agent.stream(
-            {"messages": [{"role": "user", "content": user_input}]},
-            stream_mode="updates",
-        ):
-            # Print agent messages as they come
-            for node_name, node_output in chunk.items():
-                if "messages" in node_output:
-                    for msg in node_output["messages"]:
-                        if hasattr(msg, "content") and msg.content:
+        try:
+            for chunk in agent.stream(
+                {"messages": [{"role": "user", "content": user_input}]},
+                stream_mode="updates",
+            ):
+                for node_name, node_output in chunk.items():
+                    if "messages" in node_output:
+                        for msg in node_output["messages"]:
+                            if not hasattr(msg, "content") or not msg.content:
+                                continue
                             if hasattr(msg, "tool_calls") and msg.tool_calls:
                                 for tc in msg.tool_calls:
-                                    print(f"[Using tool: {tc['name']}]")
+                                    print(f"  [Calling: {tc['name']}({tc.get('args', {})})]")
                             elif msg.type == "ai":
                                 print(f"\nAgent: {msg.content}")
                             elif msg.type == "tool":
-                                print(f"[Tool result: {msg.content[:200]}...]" if len(msg.content) > 200 else f"[Tool result: {msg.content}]")
+                                preview = msg.content[:300]
+                                print(f"  [Result: {preview}]")
+        except Exception as e:
+            print(f"\nError during agent execution: {e}")
 
         print()
 
