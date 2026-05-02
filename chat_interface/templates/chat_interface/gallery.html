@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Model Gallery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    </style>
+</head>
+<body class="bg-[#1a1a1a] text-gray-200 h-screen flex overflow-hidden font-sans">
+
+    <div class="w-64 bg-[#232323] border-r border-gray-700 flex flex-col p-4">
+        <h2 class="text-xs text-gray-400 font-semibold mb-4 tracking-wider">CHATS</h2>
+        
+        <a href="{% url 'new_chat' %}" class="bg-[#333333] hover:bg-[#404040] text-sm text-left px-4 py-2 rounded-md mb-2 transition text-center block">+ New chat</a>
+        
+        <a href="{% url 'gallery' %}" class="bg-[#2d2d3b] text-indigo-400 border border-indigo-500/30 text-sm text-left px-4 py-2 rounded-md mb-6 transition block text-center">Gallery</a>
+        
+        <div class="space-y-2 flex-1 overflow-y-auto">
+            {% for session in all_sessions %}
+                <div class="text-sm px-4 py-2 rounded-md flex justify-between items-center group transition text-gray-400 hover:bg-[#333333]">
+                    <a href="{% url 'chat_detail' session.id %}" class="flex-1 truncate block">{{ session.title }}</a>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-8">
+        <div class="max-w-6xl mx-auto">
+            <h1 class="text-2xl font-bold mb-2 text-white">Your 3D Assets</h1>
+            <p class="text-sm text-gray-400 mb-8">All objects generated across your chat sessions.</p>
+
+            {% if assets %}
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {% for asset in assets %}
+                        <div class="bg-[#232323] border border-gray-700 rounded-xl overflow-hidden flex flex-col hover:border-indigo-500/50 transition">
+                            
+                            <div class="h-64 bg-[#1a1a1a] relative">
+                                <model-viewer src="{{ asset.object_path }}" auto-rotate camera-controls style="width: 100%; height: 100%;" class="bg-[#1a1a1a]"></model-viewer>
+                            </div>
+                            
+                            <div class="p-4">
+                                <p class="text-xs text-indigo-400 mb-1">From: {{ asset.session.title }}</p>
+                                <p class="text-sm text-gray-300 line-clamp-2" title="{{ asset.text }}">"{{ asset.text }}"</p>
+                                <div class="mt-4 flex justify-between items-center">
+                                    <span class="text-xs text-gray-500">{{ asset.created_at|date:"M d, Y" }}</span>
+                                    <a href="{{ asset.object_path }}" download class="text-xs bg-[#333333] hover:bg-[#404040] px-3 py-1 rounded text-white transition">Download .glb</a>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-20 bg-[#232323] border border-dashed border-gray-700 rounded-xl">
+                    <p class="text-gray-400 mb-4">No 3D objects generated yet.</p>
+                    <a href="{% url 'new_chat' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition text-sm">Start a chat to generate one</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+</body>
+</html>

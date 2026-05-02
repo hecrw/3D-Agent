@@ -14,14 +14,16 @@ Usage:
 import time
 from pathlib import Path
 from langchain_core.tools import tool
-from langchain_ollama import ChatOllama
-from langgraph.prebuilt import create_react_agent
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # 1. Tools
 # ---------------------------------------------------------------------------
 
-from tools import (
+from chain_grad.tools import (
     generate_concept_image,
     restyle_to_objaverse,
     image_to_3d,
@@ -31,11 +33,17 @@ from tools import (
     paint3d_texture,
 )
  
-OUT = Path("outputs")
-OUT.mkdir(exist_ok=True)
- 
- 
+import os
+from django.conf import settings
+from pathlib import Path
+
+# This tells the agent to save everything inside your Django media folder
+# instead of a random folder in your root directory.
+OUT = Path(settings.MEDIA_ROOT) / "3d_outputs"
+OUT.mkdir(parents=True, exist_ok=True)
+
 def _stamp(prefix: str, ext: str) -> str:
+    # This stays the same, it just uses the new OUT path from above
     return str(OUT / f"{prefix}_{int(time.time())}.{ext}")
  
  
@@ -154,7 +162,7 @@ llm = ChatGoogleGenerativeAI(
 # ---------------------------------------------------------------------------
 # 3. Agent (LangGraph ReAct — works with langchain 1.x)
 # ---------------------------------------------------------------------------
-
+from langgraph.prebuilt import create_react_agent
 agent = create_react_agent(
     model=llm,
     tools=ALL_TOOLS,
@@ -164,34 +172,16 @@ agent = create_react_agent(
 )
 
 # ---------------------------------------------------------------------------
-# 4. Chat loop
+# 4. Exposed Function
 # ---------------------------------------------------------------------------
 
-def main():
-    print(" Cloud Agent (Gemini API + LangGraph)")
-    print("   Model : gemini-flash-latest")
-    print("   Type 'exit' to quit\n")
-
-    chat_history = []
-
-    while True:
-        user_input = input("You: ").strip()
-        if not user_input:
-            continue
-        if user_input.lower() in {"exit", "quit"}:
-            print("Goodbye!")
-            break
-
-        chat_history.append({"role": "user", "content": user_input})
-
-        try:
-            result = agent.invoke({"messages": chat_history})
-            reply = result["messages"][-1].content
-        except Exception as e:
-            reply = f"(Agent error: {e})"
-
-        print(f"\nAgent: {reply}\n")
-        chat_history.append({"role": "assistant", "content": reply})
-
-if __name__ == "__main__":
-    main()
+def process_chat(user_input, chat_history_list):
+    # chat_history_list should be a list of dicts: [{"role": "user", "content": "..."}, ...]
+    messages = chat_history_list + [{"role": "user", "content": user_input}]
+    
+    try:
+        result = agent.invoke({"messages": messages})
+        reply = result["messages"][-1].content
+        return reply
+    except Exception as e:
+        return f"Agent error: {str(e)}"

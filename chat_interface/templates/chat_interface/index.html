@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Chatbot Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .spinner {
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #6366f1;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-[#1a1a1a] text-gray-200 h-screen flex overflow-hidden font-sans">
+
+    <!-- LEFT SIDEBAR: CHAT HISTORY -->
+    <div class="w-64 bg-[#232323] border-r border-gray-700 flex flex-col p-4">
+        <!-- HOME LINK (Fixes the "no logo" navigation issue) -->
+        <a href="{% url 'index' %}" class="text-xs text-gray-400 font-semibold mb-4 tracking-wider hover:text-white transition block uppercase">
+            &larr; Home
+        </a>
+        
+        <a href="{% url 'new_chat' %}" class="bg-[#333333] hover:bg-[#404040] text-sm text-left px-4 py-2 rounded-md mb-2 transition text-center block">+ New chat</a>
+        <a href="{% url 'gallery' %}" class="bg-[#333333] hover:bg-[#404040] text-sm text-left px-4 py-2 rounded-md mb-6 transition block text-center">Gallery</a>        
+        
+        <div class="space-y-2 flex-1 overflow-y-auto">
+            {% for session in all_sessions %}
+                <div class="text-sm px-4 py-2 rounded-md flex justify-between items-center group transition 
+                    {% if session.id == active_session.id %}bg-[#2d2d3b] text-indigo-400 border border-indigo-500/30{% else %}text-gray-400 hover:bg-[#333333]{% endif %}">
+                    
+                    <a href="{% url 'chat_detail' session.id %}" class="flex-1 truncate block">{{ session.title }}</a>
+                    
+                    <div class="space-x-2 flex text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                        <button onclick="renameChat({{ session.id }}, '{{ session.title }}')" class="hover:text-gray-300">✎</button>
+                        <form action="{% url 'delete_chat' session.id %}" method="POST" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="hover:text-red-400">🗑</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- MAIN CHAT AREA -->
+    <div class="flex-1 flex flex-col relative border-r border-gray-700">
+        
+        {% if active_session %}
+            <!-- ACTIVE CHAT VIEW -->
+            <div id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-6">
+                {% for msg in messages %}
+                    <div class="flex flex-col space-y-2 {% if msg.sender == 'user' %}items-end{% else %}items-start{% endif %}">
+                        <span class="text-xs text-gray-500 font-medium">{{ msg.sender }}</span>
+                        <div class="text-sm {% if msg.sender == 'user' %}bg-[#2a2a2a] border border-gray-700{% else %}bg-[#232323]{% endif %} p-3 rounded-lg max-w-[80%] whitespace-pre-wrap">{{ msg.text }}</div>
+                        
+                        {% if msg.object_path %}
+                            <button onclick="show3DModel('{{ msg.object_path }}')" 
+                                    class="3d-trigger-btn text-xs bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 px-3 py-1.5 rounded mt-1 transition border border-indigo-500/30 w-fit cursor-pointer">
+                                ▶ View Generated 3D Model
+                            </button>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <!-- CHAT INPUT -->
+            <div class="p-4 bg-[#1a1a1a]">
+                <div class="max-w-4xl mx-auto flex gap-2">
+                    <input type="text" id="user-input" placeholder="Type a message..." class="flex-1 bg-[#2a2a2a] border border-gray-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition" autofocus>
+                    <button id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-lg transition text-sm">Send</button>
+                </div>
+            </div>
+
+        {% else %}
+            <!-- EMPTY STATE (GEMINI STYLE) -->
+            <div class="flex-1 flex flex-col items-center justify-center p-6 space-y-8 bg-[#1a1a1a]">
+                <div class="text-center space-y-3">
+                    <h1 class="text-4xl font-semibold text-gray-200">Hello there.</h1>
+                    <p class="text-gray-400 text-lg">What 3D model would you like to build today?</p>
+                </div>
+                
+                <form action="{% url 'new_chat' %}" method="POST" class="w-full max-w-2xl relative">
+                    {% csrf_token %}
+                    <input type="text" 
+                           name="initial_prompt" 
+                           placeholder="Type here to start a new chat..." 
+                           class="w-full bg-[#2a2a2a] border border-gray-600 rounded-2xl px-6 py-5 pr-24 text-md focus:outline-none focus:border-indigo-500 transition shadow-lg placeholder-gray-500" 
+                           required 
+                           autocomplete="off" 
+                           autofocus>
+                    <button type="submit" 
+                            class="absolute right-3 top-3 bottom-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 rounded-xl transition text-sm">
+                        Create
+                    </button>
+                </form>
+            </div>
+        {% endif %}
+
+    </div>
+
+    <!-- RIGHT SIDEBAR: 3D PREVIEW -->
+    <div class="w-80 bg-[#1a1a1a] flex flex-col p-4">
+        <h2 class="text-xs text-gray-400 font-semibold mb-4 tracking-wider">3D PREVIEW</h2>
+        <div id="model-container" class="flex-1 bg-[#232323] border border-dashed border-gray-600 rounded-xl flex items-center justify-center overflow-hidden relative">
+            <span id="placeholder-text" class="text-gray-500 text-sm text-center px-4">Generated assets will appear here</span>
+            <model-viewer id="viewer" src="" alt="3D model" auto-rotate camera-controls style="width: 100%; height: 100%; display: none;" class="bg-[#232323]"></model-viewer>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const viewer = document.getElementById('viewer');
+        const placeholderText = document.getElementById('placeholder-text');
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const activeSessionId = "{{ active_session.id|default_if_none:'' }}";
+
+        function appendMessage(sender, text, objectPath = null) {
+            if (!chatContainer) return;
+            
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `flex flex-col space-y-2 ${sender === 'user' ? 'items-end' : 'items-start'}`;
+            
+            let messageHtml = `
+                <span class="text-xs text-gray-500 font-medium">${sender}</span>
+                <div class="text-sm ${sender === 'user' ? 'bg-[#2a2a2a] border border-gray-700' : 'bg-[#232323]'} p-3 rounded-lg max-w-[80%] whitespace-pre-wrap">${text}</div>
+            `;
+
+            if (objectPath) {
+                messageHtml += `
+                    <button onclick="show3DModel('${objectPath}')" 
+                            class="3d-trigger-btn text-xs bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 px-3 py-1.5 rounded mt-1 transition border border-indigo-500/30 w-fit cursor-pointer">
+                        ▶ View Generated 3D Model
+                    </button>
+                `;
+            }
+
+            msgDiv.innerHTML = messageHtml;
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function show3DModel(path) {
+            placeholderText.style.display = 'none';
+            const container = document.getElementById('model-container');
+            
+            if (path.endsWith('.glb')) {
+                viewer.style.display = 'block';
+                const oldImg = container.querySelector('img');
+                if (oldImg) oldImg.remove();
+                viewer.src = path;
+            } else if (path.endsWith('.png')) {
+                viewer.style.display = 'none';
+                let img = container.querySelector('img');
+                if (!img) {
+                    img = document.createElement('img');
+                    img.className = "max-w-full max-h-full object-contain p-2";
+                    container.appendChild(img);
+                }
+                img.src = path;
+            }
+        }
+
+        // Shared Logic for fetching AI response
+        async function fetchAiResponse(text, loadingId) {
+            try {
+                const response = await fetch(`/api/chat/${activeSessionId}/message/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+
+                const data = await response.json();
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) loadingEl.remove();
+                
+                appendMessage('assistant', data.text, data["3d_object_path"]);
+                if (data["3d_object_path"]) show3DModel(data["3d_object_path"]);
+            } catch (error) {
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) {
+                    loadingEl.innerHTML = `<span class="text-xs text-gray-500 font-medium">assistant</span><div class="text-sm bg-red-900/20 border border-red-500/50 p-3 rounded-lg text-red-400">Error: Failed to reach the server.</div>`;
+                }
+            }
+        }
+
+        async function handleSend() {
+            const text = userInput.value.trim();
+            if (!text || !activeSessionId) return;
+
+            appendMessage('user', text);
+            userInput.value = '';
+
+            const loadingMsgId = 'loading-' + Date.now();
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = loadingMsgId;
+            loadingDiv.className = `flex flex-col space-y-2 items-start`;
+            loadingDiv.innerHTML = `
+                <span class="text-xs text-gray-500 font-medium">assistant</span>
+                <div class="text-sm bg-[#232323] border border-dashed border-gray-700 p-3 rounded-lg text-gray-400 flex items-center gap-3">
+                    <div class="spinner"></div> <span>Generating assets...</span>
+                </div>
+            `;
+            chatContainer.appendChild(loadingDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            await fetchAiResponse(text, loadingMsgId);
+        }
+
+        function renameChat(id, oldName) {
+            const newName = prompt("Enter new chat name:", oldName);
+            if (newName && newName !== oldName) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = `/chat/${id}/rename/`;
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden'; csrfInput.name = 'csrfmiddlewaretoken'; csrfInput.value = csrfToken;
+                const titleInput = document.createElement('input');
+                titleInput.type = 'hidden'; titleInput.name = 'new_title'; titleInput.value = newName;
+                form.appendChild(csrfInput); form.appendChild(titleInput);
+                document.body.appendChild(form); form.submit();
+            }
+        }
+
+        if (sendBtn && userInput) {
+            sendBtn.addEventListener('click', handleSend);
+            userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSend(); });
+        }
+        
+        document.addEventListener("DOMContentLoaded", () => {
+            if (chatContainer) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                // 1. Get ALL message blocks
+                const messages = chatContainer.querySelectorAll('#chat-container > div');
+                
+                if (messages.length > 0) {
+                    const lastMsg = messages[messages.length - 1];
+                    const senderSpan = lastMsg.querySelector('span');
+                    
+                    if (senderSpan) {
+                        const sender = senderSpan.innerText.toLowerCase().trim();
+                        
+                        // ONLY trigger if the absolute last message is from 'user'
+                        // This prevents the double-triggering you see in your screenshot
+                        if (sender === 'user') {
+                            const promptText = lastMsg.querySelector('.text-sm').innerText;
+                            
+                            const loadingMsgId = 'loading-initial';
+                            // Check if spinner already exists to avoid duplicates
+                            if (!document.getElementById(loadingMsgId)) {
+                                const loadingDiv = document.createElement('div');
+                                loadingDiv.id = loadingMsgId;
+                                loadingDiv.className = `flex flex-col space-y-2 items-start`;
+                                loadingDiv.innerHTML = `
+                                    <span class="text-xs text-gray-500 font-medium">assistant</span>
+                                    <div class="text-sm bg-[#232323] border border-dashed border-gray-700 p-3 rounded-lg text-gray-400 flex items-center gap-3">
+                                        <div class="spinner"></div> <span>Generating assets...</span>
+                                    </div>
+                                `;
+                                chatContainer.appendChild(loadingDiv);
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                                
+                                fetchAiResponse(promptText, loadingMsgId);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+from django.db import models
+from django.utils.timezone import now
+
+class ChatSession(models.Model):
+    title = models.CharField(max_length=100, default="New Chat")
+    created_at = models.DateTimeField(default=now)
+
+    def __str__(self):
+        return self.title
+    
+    class Meta:
+        ordering = ['-created_at'] # Newest chats at the top
+
+class ChatMessage(models.Model):
+    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="messages")
+    sender = models.CharField(max_length=50) # 'user' or 'assistant'
+    text = models.TextField()
+    object_path = models.URLField(blank=True, null=True) # For the 3D GLB file
+    created_at = models.DateTimeField(default=now)
+
+    class Meta:
+        ordering = ['created_at'] # Oldest to newest for chat history
