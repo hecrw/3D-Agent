@@ -490,5 +490,3 @@ def paint3d_texture(mesh_path: str | Path,
         volume_name="paint3d-jobs",
         **job_kwargs,
     )
-
-paint3d_texture("test.glb", prompt="a cat with an octopus head")
