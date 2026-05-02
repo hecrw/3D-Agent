@@ -23,7 +23,7 @@ load_dotenv()
 # 1. Tools
 # ---------------------------------------------------------------------------
 
-from chain_grad.tools import (
+from tools import (
     generate_concept_image,
     restyle_to_objaverse,
     image_to_3d,
