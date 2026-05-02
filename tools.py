@@ -1,6 +1,8 @@
 import argparse
+import gzip
 import io
 import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -104,6 +106,51 @@ def restyle_to_objaverse(image_path: str | Path,
     path = _save_png(data, out_path)
     print(f"[gemini] saved {path}")
     return path
+
+
+# Modal's ASGI proxy caps request bodies at ~20 MiB. Anything larger and the
+# proxy aborts the connection mid-upload (looks like a 400 to the client). For
+# texture-overwriting pipelines (Paint3D, threestudio) the input texture is
+# discarded anyway, so stripping it is free; gzip on the resulting geometry
+# typically halves it again. The server detects the gzip magic and inflates.
+_BODY_BUDGET = 18 * 1024 * 1024
+
+
+def _compact_mesh_for_upload(mesh_path: str | Path,
+                             strip_textures: bool = True) -> str:
+    """Return a path whose bytes will fit through the Modal proxy.
+
+    Strips embedded textures (lossless for pipelines that re-texture from
+    scratch), gzips, and returns a temp file path. Falls back to the original
+    file if it already fits.
+    """
+    mesh_path = str(mesh_path)
+    if os.path.getsize(mesh_path) <= _BODY_BUDGET and not strip_textures:
+        return mesh_path
+
+    import trimesh
+    m = trimesh.load(mesh_path, force="mesh")
+    if strip_textures:
+        m.visual = trimesh.visual.ColorVisuals(mesh=m)
+    buf = io.BytesIO()
+    m.export(buf, file_type="glb")
+    raw = buf.getvalue()
+
+    if len(raw) <= _BODY_BUDGET:
+        payload, suffix = raw, ".glb"
+    else:
+        payload, suffix = gzip.compress(raw, 6), ".glb.gz"
+        if len(payload) > _BODY_BUDGET:
+            raise RuntimeError(
+                f"mesh still {len(payload)/1e6:.1f} MB after strip+gzip "
+                f"(budget {_BODY_BUDGET/1e6:.0f} MB). Decimate the mesh first.")
+
+    fd, tmp = tempfile.mkstemp(suffix=suffix, prefix="upload_")
+    with os.fdopen(fd, "wb") as f:
+        f.write(payload)
+    print(f"[upload] {mesh_path} -> {tmp} "
+          f"({os.path.getsize(mesh_path)/1e6:.1f} MB -> {len(payload)/1e6:.1f} MB)")
+    return tmp
 
 
 def _download_via_volume(volume_name: str, remote_name: str,
@@ -383,13 +430,15 @@ def threestudio_refine(mesh_path: str | Path,
 
     Long-running (often 30+ min for max_steps=1500). Default timeouts in
     `_run_modal_job` are tuned for this; override via job_kwargs if needed.
+    Input texture is discarded (SDS re-textures from scratch), so we strip
+    it client-side to fit the Modal proxy's request body cap.
     """
     out_path = str(out_path or f"refined_{int(time.time())}.glb")
     return _run_modal_job(
         tag="threestudio",
         submit_url=f"{THREESTUDIO_URL}/refine",
         base_url=THREESTUDIO_URL,
-        files={"mesh": str(mesh_path)},
+        files={"mesh": _compact_mesh_for_upload(mesh_path)},
         form={
             "prompt": prompt,
             "negative_prompt": negative_prompt,
@@ -418,10 +467,12 @@ def paint3d_texture(mesh_path: str | Path,
     """Paint3D: paint a high-res lighting-less texture onto an untextured mesh.
 
     Accepts .obj/.glb/.ply (non-OBJ auto-converted server-side via trimesh).
-    Returns a path to the textured GLB.
+    Input texture is discarded (Paint3D paints from scratch), so we strip
+    it client-side to fit the Modal proxy's request body cap. Returns a
+    path to the textured GLB.
     """
     out_path = str(out_path or f"painted_{int(time.time())}.glb")
-    files = {"mesh": str(mesh_path)}
+    files = {"mesh": _compact_mesh_for_upload(mesh_path)}
     if ip_image_path is not None:
         files["ip_image"] = str(ip_image_path)
     return _run_modal_job(
@@ -440,4 +491,4 @@ def paint3d_texture(mesh_path: str | Path,
         **job_kwargs,
     )
 
-paint3d_texture("test.glb", prompt="a cat with a hat")
+paint3d_texture("test.glb", prompt="a cat with an octopus head")
