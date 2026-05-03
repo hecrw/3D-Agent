@@ -29,6 +29,8 @@ from tools import (
     trellis2,
     trellis2_texture,
     partcrafter,
+    hunyuan3d2,
+    hunyuan3d2_texture,
     threestudio_refine,
     paint3d_texture,
 )
@@ -107,6 +109,26 @@ def tool_partcrafter(image_path: str, num_parts: int = 3, scene: bool = False) -
     return f"Part-decomposed model saved: {path}"
  
  
+@tool
+def tool_hunyuan3d2(image_path: str) -> str:
+    """Run Hunyuan3D-2: convert a clean image into a fully textured 3D GLB file.
+    Faster alternative to TRELLIS for image-to-3D with PBR textures.
+    Returns the path to the output .glb file."""
+    out = _stamp("hunyuan", "glb")
+    path = hunyuan3d2(image_path=image_path, out_path=out)
+    return f"3D model saved: {path}"
+
+
+@tool
+def tool_hunyuan3d2_texture(image_path: str, mesh_path: str) -> str:
+    """Re-texture an existing mesh using Hunyuan3D-2 Paint, guided by a reference image.
+    Accepts .glb/.obj/.ply/.stl. Use when you already have a mesh and want PBR textures.
+    Returns the path to the textured .glb file."""
+    out = _stamp("hunyuan_textured", "glb")
+    path = hunyuan3d2_texture(image_path=image_path, mesh_path=mesh_path, out_path=out)
+    return f"Textured model saved: {path}"
+
+
 # ── Stage 3: refinement ───────────────────────────────────────────────────────
  
 @tool
@@ -144,6 +166,8 @@ ALL_TOOLS = [
     tool_trellis2,
     tool_trellis2_texture,
     tool_partcrafter,
+    tool_hunyuan3d2,
+    tool_hunyuan3d2_texture,
     tool_threestudio_refine,
     tool_paint3d_texture,
 ]
