@@ -487,4 +487,7 @@ def threestudio_refine(mesh_path: str | Path,
         **job_kwargs,
     )
 
-generate_concept_image("a cat with a hat and boots")
+def test():
+    generate_concept_image("a cat with a hat and boots", "media/2d_outputs/cat.jpeg")
+    restyle_to_objaverse("media/2d_outputs/cat.jpeg", "media/2d_outputs/restylized_cat.jpeg")
+    hunyuan3d2("media/2d_outputs/restylized_cat.jpeg", "media/3d_outputs/cat.glb")

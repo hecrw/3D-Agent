@@ -62,8 +62,8 @@ image = (
     )
     .pip_install(
         # hy3dgen requirements (matches their setup.py install_requires).
-        "diffusers==0.31.0",
-        "transformers>=4.48.0",
+        "diffusers==0.32.2",
+        "transformers==4.49.0",
         "accelerate",
         "einops",
         "omegaconf",
@@ -151,13 +151,26 @@ async def _serve_job(job_id: str, download_name: str):
 class Generator:
     @modal.enter()
     def load(self):
-        from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+        from hy3dgen.shapegen import (
+            Hunyuan3DDiTFlowMatchingPipeline,
+            FloaterRemover,
+            DegenerateFaceRemover,
+            FaceReducer,
+        )
         from hy3dgen.texgen import Hunyuan3DPaintPipeline
         from hy3dgen.rembg import BackgroundRemover
 
-        self.shape = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(SHAPE_MODEL)
+        self.shape = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
+            SHAPE_MODEL,
+            use_safetensors=True,
+            device="cuda",
+        )
+        self.shape.enable_flashvdm(mc_algo="mc")
         self.paint = Hunyuan3DPaintPipeline.from_pretrained(PAINT_MODEL)
         self.rembg = BackgroundRemover()
+        self.floater_remover = FloaterRemover()
+        self.degen_remover = DegenerateFaceRemover()
+        self.face_reducer = FaceReducer()
 
     @modal.method()
     def _do_generate(
@@ -168,6 +181,7 @@ class Generator:
         steps: int,
         guidance_scale: float,
         octree_resolution: int,
+        face_count: int,
         with_texture: bool,
         rembg: bool,
     ):
@@ -177,7 +191,7 @@ class Generator:
         out_path, err_path = _job_paths(job_id)
         try:
             img = _read_image(image_bytes)
-            if rembg and img.mode == "RGB":
+            if rembg:
                 img = self.rembg(img)
 
             generator = torch.Generator(device="cuda").manual_seed(seed)
@@ -187,9 +201,13 @@ class Generator:
                 guidance_scale=guidance_scale,
                 octree_resolution=octree_resolution,
                 generator=generator,
+                mc_algo="mc",
             )[0]
 
             if with_texture:
+                mesh = self.floater_remover(mesh)
+                mesh = self.degen_remover(mesh)
+                mesh = self.face_reducer(mesh, max_facenum=face_count)
                 mesh = self.paint(mesh, image=img)
 
             mesh.export(out_path)
@@ -224,6 +242,7 @@ class Generator:
             steps: int = Form(50),
             guidance_scale: float = Form(5.5),
             octree_resolution: int = Form(256),
+            face_count: int = Form(40000),
             rembg: bool = Form(True),
         ):
             try:
@@ -235,7 +254,7 @@ class Generator:
             job_id = uuid.uuid4().hex
             await self._do_generate.spawn.aio(
                 image_bytes, job_id, seed, steps, guidance_scale,
-                octree_resolution, True, rembg,
+                octree_resolution, face_count, True, rembg,
             )
             return {"job_id": job_id, "poll_url": f"/jobs/{job_id}"}
 
@@ -257,7 +276,7 @@ class Generator:
             job_id = uuid.uuid4().hex
             await self._do_generate.spawn.aio(
                 image_bytes, job_id, seed, steps, guidance_scale,
-                octree_resolution, False, rembg,
+                octree_resolution, 40000, False, rembg,
             )
             return {"job_id": job_id, "poll_url": f"/jobs/{job_id}"}
 
@@ -304,7 +323,7 @@ class Texturer:
         tmp_path = None
         try:
             img = _read_image(image_bytes)
-            if rembg and img.mode == "RGB":
+            if rembg:
                 img = self.rembg(img)
 
             with tempfile.NamedTemporaryFile(suffix=mesh_suffix, delete=False) as tmp:
