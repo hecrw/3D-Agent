@@ -32,7 +32,6 @@ from tools import (
     hunyuan3d2,
     hunyuan3d2_texture,
     threestudio_refine,
-    paint3d_texture,
 )
  
 import os
@@ -142,20 +141,6 @@ def tool_threestudio_refine(mesh_path: str, prompt: str) -> str:
     return f"Refined model saved: {path}"
  
  
-@tool
-def tool_paint3d_texture(mesh_path: str, prompt: str, ip_image_path: str = None) -> str:
-    """Paint a high-res, lighting-free texture onto an untextured mesh using Paint3D.
-    Faster than threestudio for texture-only work. Accepts .obj, .glb, or .ply.
-    Optionally pass ip_image_path for image-guided texturing.
-    Returns the path to the painted .glb file."""
-    out = _stamp("painted", "glb")
-    path = paint3d_texture(
-        mesh_path=mesh_path,
-        prompt=prompt,
-        out_path=out,
-        ip_image_path=ip_image_path or None,
-    )
-    return f"Painted model saved: {path}"
  
  
 # ── exported list ─────────────────────────────────────────────────────────────
@@ -169,7 +154,6 @@ ALL_TOOLS = [
     tool_hunyuan3d2,
     tool_hunyuan3d2_texture,
     tool_threestudio_refine,
-    tool_paint3d_texture,
 ]
 
 

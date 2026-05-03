@@ -5,7 +5,7 @@ Two pipelines:
     Hunyuan3D-DiT      shape generation       ~6 GB VRAM
     Hunyuan3D-Paint    PBR texture synthesis  ~10 GB VRAM (16 GB combined)
 
-Async submit/poll, same shape as the trellis2/partcrafter/paint3d apps.
+Async submit/poll, same shape as the trellis2/partcrafter/ apps.
 
 Routes:
     POST /generate     image                    -> {job_id}    (shape + texture)

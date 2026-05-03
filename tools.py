@@ -22,7 +22,6 @@ PARTCRAFTER_OBJ_URL = f"https://{WORKSPACE}--partcrafter-objectgenerator-web.mod
 PARTCRAFTER_SCENE_URL = f"https://{WORKSPACE}--partcrafter-scenegenerator-web.modal.run"
 THREESTUDIO_URL = f"https://{WORKSPACE}--threestudio-refiner-refiner-web.modal.run"
 DREAMEDITOR_URL = f"https://{WORKSPACE}--dreameditor-editor-web.modal.run"
-PAINT3D_URL = f"https://{WORKSPACE}--paint3d-painter-web.modal.run"
 HUNYUAN3D2_GEN_URL = f"https://{WORKSPACE}--hunyuan3d-2-generator-web.modal.run"
 HUNYUAN3D2_TEX_URL = f"https://{WORKSPACE}--hunyuan3d-2-texturer-web.modal.run"
 
