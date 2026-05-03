@@ -324,14 +324,14 @@ def _run_modal_job(tag: str,
         raise RuntimeError(f"{tag} error {resp.status_code}: {body}")
 
 
-def image_to_3d(image_path: str | Path,
-                out_path: str | Path | None = None,
-                pipeline_type: str = "1024_cascade",
-                remesh: bool = True,
-                seed: int = 42,
-                decimation_target: int = 1_000_000,
-                texture_size: int = 4096,
-                **job_kwargs) -> str:
+def trellis2(image_path: str | Path,
+             out_path: str | Path | None = None,
+             pipeline_type: str = "1024_cascade",
+             remesh: bool = True,
+             seed: int = 42,
+             decimation_target: int = 1_000_000,
+             texture_size: int = 4096,
+             **job_kwargs) -> str:
     """TRELLIS.2: image -> GLB."""
     out_path = str(out_path or f"model_{int(time.time())}.glb")
     return _run_modal_job(
@@ -352,14 +352,13 @@ def image_to_3d(image_path: str | Path,
     )
 
 
-def texture_mesh(image_path: str | Path,
-                 mesh_path: str | Path,
-                 out_path: str | Path | None = None,
-                 
-                 seed: int = 42,
-                 resolution: int = 1024,
-                 texture_size: int = 2048,
-                 **job_kwargs) -> str:
+def trellis2_texture(image_path: str | Path,
+                     mesh_path: str | Path,
+                     out_path: str | Path | None = None,
+                     seed: int = 42,
+                     resolution: int = 1024,
+                     texture_size: int = 2048,
+                     **job_kwargs) -> str:
     """TRELLIS.2 texturer: image + mesh -> textured GLB."""
     out_path = str(out_path or f"textured_{int(time.time())}.glb")
     return _run_modal_job(
@@ -450,43 +449,5 @@ def threestudio_refine(mesh_path: str | Path,
         },
         out_path=out_path,
         volume_name="threestudio-jobs",
-        **job_kwargs,
-    )
-
-
-def paint3d_texture(mesh_path: str | Path,
-                    prompt: str,
-                    out_path: str | Path | None = None,
-                    ip_image_path: str | Path | None = None,
-                    seed: int = 0,
-                    sd_config: str = (
-                        "controlnet/config/depth_based_inpaint_template.yaml"),
-                    render_config: str = (
-                        "paint3d/config/train_config_paint3d.py"),
-                    **job_kwargs) -> str:
-    """Paint3D: paint a high-res lighting-less texture onto an untextured mesh.
-
-    Accepts .obj/.glb/.ply (non-OBJ auto-converted server-side via trimesh).
-    Input texture is discarded (Paint3D paints from scratch), so we strip
-    it client-side to fit the Modal proxy's request body cap. Returns a
-    path to the textured GLB.
-    """
-    out_path = str(out_path or f"painted_{int(time.time())}.glb")
-    files = {"mesh": _compact_mesh_for_upload(mesh_path)}
-    if ip_image_path is not None:
-        files["ip_image"] = str(ip_image_path)
-    return _run_modal_job(
-        tag="paint3d",
-        submit_url=f"{PAINT3D_URL}/paint",
-        base_url=PAINT3D_URL,
-        files=files,
-        form={
-            "prompt": prompt,
-            "seed": str(seed),
-            "sd_config": sd_config,
-            "render_config": render_config,
-        },
-        out_path=out_path,
-        volume_name="paint3d-jobs",
         **job_kwargs,
     )

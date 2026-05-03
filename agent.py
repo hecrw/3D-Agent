@@ -26,8 +26,8 @@ load_dotenv()
 from tools import (
     generate_concept_image,
     restyle_to_objaverse,
-    image_to_3d,
-    texture_mesh,
+    trellis2,
+    trellis2_texture,
     partcrafter,
     threestudio_refine,
     paint3d_texture,
@@ -73,22 +73,22 @@ def tool_restyle_to_objaverse(image_path: str) -> str:
 # ── Stage 2: 3D generation ───────────────────────────────────────────────────
  
 @tool
-def tool_image_to_3d(image_path: str) -> str:
+def tool_trellis2(image_path: str) -> str:
     """Run the TRELLIS pipeline: convert a clean image into a textured 3D GLB file.
     Input should be an Objaverse-style image (use tool_restyle_to_objaverse first if needed).
     Returns the path to the output .glb file."""
     out = _stamp("model", "glb")
-    path = image_to_3d(image_path=image_path, out_path=out)
+    path = trellis2(image_path=image_path, out_path=out)
     return f"3D model saved: {path}"
- 
- 
+
+
 @tool
-def tool_texture_mesh(image_path: str, mesh_path: str) -> str:
+def tool_trellis2_texture(image_path: str, mesh_path: str) -> str:
     """Re-texture an existing mesh using TRELLIS, guided by a reference image.
     Use this when you already have a .glb/.obj mesh and want better textures.
     Returns the path to the textured .glb file."""
     out = _stamp("textured", "glb")
-    path = texture_mesh(image_path=image_path, mesh_path=mesh_path, out_path=out)
+    path = trellis2_texture(image_path=image_path, mesh_path=mesh_path, out_path=out)
     return f"Textured model saved: {path}"
  
  
@@ -141,8 +141,8 @@ def tool_paint3d_texture(mesh_path: str, prompt: str, ip_image_path: str = None)
 ALL_TOOLS = [
     tool_generate_concept_image,
     tool_restyle_to_objaverse,
-    tool_image_to_3d,
-    tool_texture_mesh,
+    tool_trellis2,
+    tool_trellis2_texture,
     tool_partcrafter,
     tool_threestudio_refine,
     tool_paint3d_texture,
