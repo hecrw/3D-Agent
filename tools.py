@@ -23,6 +23,8 @@ PARTCRAFTER_SCENE_URL = f"https://{WORKSPACE}--partcrafter-scenegenerator-web.mo
 THREESTUDIO_URL = f"https://{WORKSPACE}--threestudio-refiner-refiner-web.modal.run"
 DREAMEDITOR_URL = f"https://{WORKSPACE}--dreameditor-editor-web.modal.run"
 PAINT3D_URL = f"https://{WORKSPACE}--paint3d-painter-web.modal.run"
+HUNYUAN3D2_GEN_URL = f"https://{WORKSPACE}--hunyuan3d-2-generator-web.modal.run"
+HUNYUAN3D2_TEX_URL = f"https://{WORKSPACE}--hunyuan3d-2-texturer-web.modal.run"
 
 
 OBJAVERSE_STYLE_PROMPT = (
@@ -410,6 +412,53 @@ def partcrafter(image_path: str | Path,
         },
         out_path=out_path,
         volume_name="partcrafter-jobs",
+        **job_kwargs,
+    )
+
+
+def hunyuan3d2(image_path: str | Path,
+               out_path: str | Path | None = None,
+               seed: int = 42,
+               steps: int = 50,
+               guidance_scale: float = 5.5,
+               octree_resolution: int = 256,
+               rembg: bool = True,
+               **job_kwargs) -> str:
+    """Hunyuan3D-2: image -> textured GLB (shape + paint)."""
+    out_path = str(out_path or f"hunyuan3d2_{int(time.time())}.glb")
+    return _run_modal_job(
+        tag="hunyuan3d2",
+        submit_url=f"{HUNYUAN3D2_GEN_URL}/generate",
+        base_url=HUNYUAN3D2_GEN_URL,
+        files={"image": str(image_path)},
+        form={
+            "seed": str(seed),
+            "steps": str(steps),
+            "guidance_scale": str(guidance_scale),
+            "octree_resolution": str(octree_resolution),
+            "rembg": str(rembg).lower(),
+        },
+        out_path=out_path,
+        volume_name="hunyuan3d-2-jobs",
+        **job_kwargs,
+    )
+
+
+def hunyuan3d2_texture(image_path: str | Path,
+                       mesh_path: str | Path,
+                       out_path: str | Path | None = None,
+                       rembg: bool = True,
+                       **job_kwargs) -> str:
+    """Hunyuan3D-2 paint: image + mesh -> retextured GLB."""
+    out_path = str(out_path or f"hunyuan3d2_textured_{int(time.time())}.glb")
+    return _run_modal_job(
+        tag="hunyuan3d2-tex",
+        submit_url=f"{HUNYUAN3D2_TEX_URL}/texture",
+        base_url=HUNYUAN3D2_TEX_URL,
+        files={"image": str(image_path), "mesh": str(mesh_path)},
+        form={"rembg": str(rembg).lower()},
+        out_path=out_path,
+        volume_name="hunyuan3d-2-jobs",
         **job_kwargs,
     )
 
