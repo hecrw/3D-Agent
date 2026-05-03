@@ -110,13 +110,6 @@ def restyle_to_objaverse(image_path: str | Path,
     return path
 
 
-# Modal's ASGI proxy caps request bodies at ~20 MiB. Anything larger and the
-# proxy aborts the connection mid-upload (looks like a 400 to the client). For
-# texture-overwriting pipelines (Paint3D, threestudio) the input texture is
-# discarded anyway, so stripping it is free; gzip on the resulting geometry
-# typically halves it again. The server detects the gzip magic and inflates.
-_BODY_BUDGET = 18 * 1024 * 1024
-
 
 def _compact_mesh_for_upload(mesh_path: str | Path,
                              strip_textures: bool = True) -> str:
@@ -127,7 +120,7 @@ def _compact_mesh_for_upload(mesh_path: str | Path,
     file if it already fits.
     """
     mesh_path = str(mesh_path)
-    if os.path.getsize(mesh_path) <= _BODY_BUDGET and not strip_textures:
+    if os.path.getsize(mesh_path) and not strip_textures:
         return mesh_path
 
     import trimesh
@@ -138,14 +131,7 @@ def _compact_mesh_for_upload(mesh_path: str | Path,
     m.export(buf, file_type="glb")
     raw = buf.getvalue()
 
-    if len(raw) <= _BODY_BUDGET:
-        payload, suffix = raw, ".glb"
-    else:
-        payload, suffix = gzip.compress(raw, 6), ".glb.gz"
-        if len(payload) > _BODY_BUDGET:
-            raise RuntimeError(
-                f"mesh still {len(payload)/1e6:.1f} MB after strip+gzip "
-                f"(budget {_BODY_BUDGET/1e6:.0f} MB). Decimate the mesh first.")
+    payload, suffix = raw, ".glb"
 
     fd, tmp = tempfile.mkstemp(suffix=suffix, prefix="upload_")
     with os.fdopen(fd, "wb") as f:
@@ -500,3 +486,5 @@ def threestudio_refine(mesh_path: str | Path,
         volume_name="threestudio-jobs",
         **job_kwargs,
     )
+
+generate_concept_image("a cat with a hat and boots")
