@@ -20,10 +20,10 @@ TRELLIS_GEN_URL = f"https://{WORKSPACE}--trellis2-generator-web.modal.run"
 TRELLIS_TEX_URL = f"https://{WORKSPACE}--trellis2-texturer-web.modal.run"
 PARTCRAFTER_OBJ_URL = f"https://{WORKSPACE}--partcrafter-objectgenerator-web.modal.run"
 PARTCRAFTER_SCENE_URL = f"https://{WORKSPACE}--partcrafter-scenegenerator-web.modal.run"
-THREESTUDIO_URL = f"https://{WORKSPACE}--threestudio-refiner-refiner-web.modal.run"
-DREAMEDITOR_URL = f"https://{WORKSPACE}--dreameditor-editor-web.modal.run"
 HUNYUAN3D2_GEN_URL = f"https://{WORKSPACE}--hunyuan3d-2-generator-web.modal.run"
 HUNYUAN3D2_TEX_URL = f"https://{WORKSPACE}--hunyuan3d-2-texturer-web.modal.run"
+HUNYUAN3D_PART_SEG_URL = f"https://{WORKSPACE}--hunyuan3d-part-segmenter-web.modal.run"
+HUNYUAN3D_PART_DEC_URL = f"https://{WORKSPACE}--hunyuan3d-part-decomposer-web.modal.run"
 
 
 OBJAVERSE_STYLE_PROMPT = (
@@ -448,41 +448,42 @@ def hunyuan3d2_texture(image_path: str | Path,
     )
 
 
-def threestudio_refine(mesh_path: str | Path,
-                       prompt: str,
-                       out_path: str | Path | None = None,
-                       negative_prompt: str = (
-                           "ugly, blurry, low quality, distorted"),
-                       seed: int = 0,
-                       max_steps: int = 1500,
-                       guidance_scale: float = 100.0,
-                       mesh_up: str = "+y",
-                       mesh_front: str = "+z",
-                       **job_kwargs) -> str:
-    """threestudio SDS refiner: mesh + prompt -> refined GLB.
-
-    Long-running (often 30+ min for max_steps=1500). Default timeouts in
-    `_run_modal_job` are tuned for this; override via job_kwargs if needed.
-    Input texture is discarded (SDS re-textures from scratch), so we strip
-    it client-side to fit the Modal proxy's request body cap.
-    """
-    out_path = str(out_path or f"refined_{int(time.time())}.glb")
+def hunyuan3d_part_segment(mesh_path: str | Path,
+                           out_path: str | Path | None = None,
+                           point_num: int = 100000,
+                           prompt_num: int = 400,
+                           **job_kwargs) -> str:
+    """Hunyuan3D-Part / P3-SAM: mesh -> labelled GLB (faces tagged by part)."""
+    out_path = str(out_path or f"hunyuan3d_part_seg_{int(time.time())}.glb")
     return _run_modal_job(
-        tag="threestudio",
-        submit_url=f"{THREESTUDIO_URL}/refine",
-        base_url=THREESTUDIO_URL,
+        tag="hunyuan3d-part-seg",
+        submit_url=f"{HUNYUAN3D_PART_SEG_URL}/segment",
+        base_url=HUNYUAN3D_PART_SEG_URL,
         files={"mesh": _compact_mesh_for_upload(mesh_path)},
         form={
-            "prompt": prompt,
-            "negative_prompt": negative_prompt,
-            "seed": str(seed),
-            "max_steps": str(max_steps),
-            "guidance_scale": str(guidance_scale),
-            "mesh_up": mesh_up,
-            "mesh_front": mesh_front,
+            "point_num": str(point_num),
+            "prompt_num": str(prompt_num),
         },
         out_path=out_path,
-        volume_name="threestudio-jobs",
+        volume_name="hunyuan3d-part-jobs",
+        **job_kwargs,
+    )
+
+
+def hunyuan3d_part_decompose(mesh_path: str | Path,
+                             out_path: str | Path | None = None,
+                             octree_resolution: int = 512,
+                             **job_kwargs) -> str:
+    """Hunyuan3D-Part / X-Part: mesh -> exploded-parts GLB (each part as a sub-mesh)."""
+    out_path = str(out_path or f"hunyuan3d_part_dec_{int(time.time())}.glb")
+    return _run_modal_job(
+        tag="hunyuan3d-part-dec",
+        submit_url=f"{HUNYUAN3D_PART_DEC_URL}/decompose",
+        base_url=HUNYUAN3D_PART_DEC_URL,
+        files={"mesh": _compact_mesh_for_upload(mesh_path)},
+        form={"octree_resolution": str(octree_resolution)},
+        out_path=out_path,
+        volume_name="hunyuan3d-part-jobs",
         **job_kwargs,
     )
 
