@@ -31,7 +31,8 @@ from tools import (
     partcrafter,
     hunyuan3d2,
     hunyuan3d2_texture,
-    threestudio_refine,
+    hunyuan3d_part_segment,
+    hunyuan3d_part_decompose,
 )
  
 import os
@@ -128,17 +129,30 @@ def tool_hunyuan3d2_texture(image_path: str, mesh_path: str) -> str:
     return f"Textured model saved: {path}"
 
 
-# ── Stage 3: refinement ───────────────────────────────────────────────────────
- 
 @tool
-def tool_threestudio_refine(mesh_path: str, prompt: str) -> str:
-    """Deeply refine a 3D mesh using threestudio SDS with a text prompt.
-    This is slow (30+ minutes) but produces the highest quality results.
-    Use as a final quality pass after generating the initial mesh.
-    Returns the path to the refined .glb file."""
-    out = _stamp("refined", "glb")
-    path = threestudio_refine(mesh_path=mesh_path, prompt=prompt, out_path=out)
-    return f"Refined model saved: {path}"
+def tool_hunyuan3d_part_segment(mesh_path: str) -> str:
+    """Segment an existing 3D mesh into semantic parts using Hunyuan3D-Part / P3-SAM.
+    Input is any .glb/.obj/.ply/.stl. Output is the same mesh with each face tagged
+    by part (visible as colored regions). Use this when you want to know what parts
+    a mesh contains without changing its geometry.
+    Returns the path to the labelled .glb file."""
+    out = _stamp("part_seg", "glb")
+    path = hunyuan3d_part_segment(mesh_path=mesh_path, out_path=out)
+    return f"Segmented model saved: {path}"
+
+
+@tool
+def tool_hunyuan3d_part_decompose(mesh_path: str) -> str:
+    """Decompose an existing 3D mesh into separate part sub-meshes using Hunyuan3D-Part / X-Part.
+    Input is any .glb/.obj/.ply/.stl. Output is an exploded GLB where each semantic part
+    is its own sub-mesh, spread apart for visibility. Use this as the FIRST step when
+    you want to edit a specific part of a mesh — once parts are separate sub-meshes,
+    other tools can drop, replace, or retexture them individually.
+    Returns the path to the exploded .glb file."""
+    out = _stamp("part_dec", "glb")
+    path = hunyuan3d_part_decompose(mesh_path=mesh_path, out_path=out)
+    return f"Decomposed model saved: {path}"
+
  
  
  
@@ -153,7 +167,8 @@ ALL_TOOLS = [
     tool_partcrafter,
     tool_hunyuan3d2,
     tool_hunyuan3d2_texture,
-    tool_threestudio_refine,
+    tool_hunyuan3d_part_segment,
+    tool_hunyuan3d_part_decompose,
 ]
 
 
