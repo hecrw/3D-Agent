@@ -2,12 +2,15 @@ import argparse
 import gzip
 import io
 import os
+import random
 import tempfile
 import time
 from pathlib import Path
 from typing import Optional
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -15,7 +18,7 @@ from PIL import Image
 
 load_dotenv()
 
-WORKSPACE = os.environ.get("TRELLIS_WORKSPACE", "yousefarafa40612")
+WORKSPACE = os.environ.get("TRELLIS_WORKSPACE", "")
 TRELLIS_GEN_URL = f"https://{WORKSPACE}--trellis2-generator-web.modal.run"
 TRELLIS_TEX_URL = f"https://{WORKSPACE}--trellis2-texturer-web.modal.run"
 PARTCRAFTER_OBJ_URL = f"https://{WORKSPACE}--partcrafter-objectgenerator-web.modal.run"
@@ -113,7 +116,7 @@ def _tavily(payload: dict) -> dict:
     key = os.environ.get("TAVILY_API_KEY")
     if not key:
         raise RuntimeError("TAVILY_API_KEY not set (check your .env)")
-    r = requests.post(TAVILY_URL, json={"api_key": key, **payload}, timeout=30)
+    r = _session.post(TAVILY_URL, json={"api_key": key, **payload}, timeout=30)
     r.raise_for_status()
     return r.json()
 
@@ -150,7 +153,7 @@ def download_image(url: str, out_path: str | Path | None = None) -> str:
     """Download an image URL to a local file. Returns the saved path."""
     out_path = str(out_path or f"downloaded_{int(time.time())}.jpg")
     print(f"[download] {url}")
-    r = requests.get(
+    r = _session.get(
         url, stream=True, timeout=60,
         headers={"User-Agent": "Mozilla/5.0"},
     )
@@ -184,6 +187,60 @@ def _download_via_volume(volume_name: str, remote_name: str,
     return os.path.getsize(out_path)
 
 
+SUBMIT_MAX_RETRIES = 8
+SUBMIT_BACKOFF_BASE_S = 10.0
+SUBMIT_BACKOFF_MAX_S = 60.0
+RETRY_JITTER = 0.2
+POLL_INTERVAL_S = 10.0
+POLL_TRANSIENT_BUDGET_S = 900
+TOTAL_DEADLINE_S = 3600
+EMPTY_RETRY_MAX = 5
+MIN_ARTIFACT_BYTES = 1024
+RETRYABLE_4XX = {408, 429}
+
+
+def _jittered(seconds: float, frac: float = RETRY_JITTER) -> float:
+    """Add ±frac random jitter to a sleep duration. Floor at 0.1s."""
+    return max(0.1, seconds * (1 + random.uniform(-frac, frac)))
+
+
+def _retry_after(resp) -> Optional[float]:
+    """Honor `Retry-After` header (seconds form). Returns None if absent."""
+    if resp is None:
+        return None
+    val = resp.headers.get("Retry-After")
+    if val and val.strip().isdigit():
+        return float(val.strip())
+    return None
+
+
+def _is_retryable_status(status: int) -> bool:
+    """5xx is always retryable; 4xx is terminal except 408/429."""
+    return status >= 500 or status in RETRYABLE_4XX
+
+
+def _build_session() -> requests.Session:
+    s = requests.Session()
+    adapter = HTTPAdapter(
+        pool_connections=10,
+        pool_maxsize=10,
+        max_retries=Retry(
+            total=2,
+            connect=2,
+            read=0,
+            backoff_factor=0.5,
+            status_forcelist=[],
+            allowed_methods=frozenset(["GET", "POST"]),
+        ),
+    )
+    s.mount("http://", adapter)
+    s.mount("https://", adapter)
+    return s
+
+
+_session = _build_session()
+
+
 def _stream_to_file(resp, out_path: str) -> int:
     """Stream an HTTP response body to a file. Returns bytes written."""
     written = 0
@@ -206,8 +263,14 @@ def _download_artifact(tag: str, job_url: str, out_path: str,
                 volume_name, f"{job_id}{remote_suffix}", out_path)
         except Exception as e:
             print(f"[{tag}] volume download failed ({e}); falling back to HTTP")
-    with requests.get(job_url, stream=True, timeout=(10, read_timeout)) as r:
+    with _session.get(job_url, stream=True, timeout=(10, read_timeout)) as r:
         return _stream_to_file(r, out_path)
+
+
+def _backoff(attempt: int) -> float:
+    """Exponential backoff with cap, jittered."""
+    return _jittered(min(SUBMIT_BACKOFF_MAX_S,
+                         SUBMIT_BACKOFF_BASE_S * 2 ** (attempt - 1)))
 
 
 def _check_transient_budget(tag: str, started_at: Optional[float],
@@ -233,58 +296,76 @@ def _run_modal_job(tag: str,
                    out_path: str,
                    volume_name: str | None = None,
                    remote_suffix: str = ".glb",
-                   poll_every: int = 10,
-                   submit_retries: int = 8,
+                   poll_every: float = POLL_INTERVAL_S,
+                   submit_retries: int = SUBMIT_MAX_RETRIES,
                    submit_read_timeout: int = 600,
                    download_read_timeout: int = 600,
-                   min_bytes: int = 1024,
-                   cold_start_budget_s: int = 900) -> str:
+                   min_bytes: int = MIN_ARTIFACT_BYTES,
+                   cold_start_budget_s: int = POLL_TRANSIENT_BUDGET_S,
+                   total_deadline_s: int = TOTAL_DEADLINE_S) -> str:
     """Generic submit -> poll -> download for any TRELLIS-style Modal app.
+
+    retry behavior:
+      * Jittered exponential backoff on submit; respects `Retry-After`.
+      * 4xx (except 408/429) fails immediately - auth/payload errors don't retry.
+      * 5xx + connection errors share a transient budget (cold-start window).
+      * Hard total deadline from submit time prevents pathological infinite polls.
+      * Empty artifact (200 with < min_bytes) retried up to EMPTY_RETRY_MAX
+        - covers the volume eventual-consistency window after worker commit.
 
     `files` is a dict of {field: open_path_str}. We open and stream each.
     Returns the path to the downloaded artifact.
     """
-    # ── 1. Submit with exponential backoff ────────────────────────────────────
+    deadline = time.time() + total_deadline_s
+
     print(f"[{tag}] submit -> {submit_url}")
     job_id: Optional[str] = None
     last_err: Optional[Exception] = None
     for attempt in range(1, submit_retries + 1):
+        if time.time() >= deadline:
+            raise RuntimeError(f"{tag} submit deadline reached ({total_deadline_s}s)")
         opened = {k: open(v, "rb") for k, v in files.items()}
+        wait: float = 0.0
         try:
-            r = requests.post(submit_url, files=opened, data=form,
+            r = _session.post(submit_url, files=opened, data=form,
                               timeout=(10, submit_read_timeout))
-            if r.status_code >= 500:
-                raise requests.exceptions.HTTPError(
-                    f"{r.status_code}: {r.text[:200]}", response=r)
-            r.raise_for_status()
-            job_id = r.json()["job_id"]
-            break
+            if r.status_code == 200:
+                job_id = r.json()["job_id"]
+                break
+            if not _is_retryable_status(r.status_code):
+                raise RuntimeError(
+                    f"{tag} submit non-retryable {r.status_code}: {r.text[:200]}")
+            wait = _retry_after(r) or _backoff(attempt)
+            last_err = RuntimeError(f"{r.status_code}: {r.text[:200]}")
         except requests.exceptions.RequestException as e:
             last_err = e
-            wait = min(60, 10 * (2 ** (attempt - 1)))
-            print(f"[{tag}] submit {attempt}/{submit_retries} failed "
-                  f"({type(e).__name__}); retrying in {wait}s")
-            time.sleep(wait)
+            wait = _backoff(attempt)
         finally:
             for fh in opened.values():
                 fh.close()
+        print(f"[{tag}] submit {attempt}/{submit_retries} failed: "
+              f"{last_err}; retrying in {wait:.1f}s")
+        time.sleep(wait)
     if job_id is None:
         raise RuntimeError(f"{tag} submit failed after {submit_retries}: {last_err}")
     print(f"[{tag}] job={job_id}")
 
-    # ── 2. Poll until 200 or budget exhausted ─────────────────────────────────
     job_url = f"{base_url}/jobs/{job_id}"
     transient_since: Optional[float] = None
     empty_count = 0
 
     while True:
+        if time.time() >= deadline:
+            raise RuntimeError(
+                f"{tag} poll deadline reached ({total_deadline_s}s) - job {job_id}")
+
         try:
-            resp = requests.get(job_url, timeout=(10, download_read_timeout))
+            resp = _session.get(job_url, timeout=(10, download_read_timeout))
         except requests.exceptions.RequestException as e:
             transient_since = _check_transient_budget(
                 tag, transient_since, cold_start_budget_s,
                 f"poll error ({type(e).__name__})")
-            time.sleep(poll_every)
+            time.sleep(_jittered(poll_every))
             continue
 
         status = resp.status_code
@@ -293,16 +374,17 @@ def _run_modal_job(tag: str,
             resp.close()
             transient_since = None
             print(f"[{tag}] pending...")
-            time.sleep(poll_every)
+            time.sleep(_jittered(poll_every))
             continue
 
-        if status >= 500:
+        if _is_retryable_status(status):
+            wait = _retry_after(resp) or _jittered(poll_every)
             body = resp.text[:200]
             resp.close()
             transient_since = _check_transient_budget(
                 tag, transient_since, cold_start_budget_s,
-                f"{status} (cold start?): {body[:120]}")
-            time.sleep(poll_every)
+                f"{status}: {body[:120]}")
+            time.sleep(wait)
             continue
 
         if status != 200:
@@ -310,7 +392,6 @@ def _run_modal_job(tag: str,
             resp.close()
             raise RuntimeError(f"{tag} error {status}: {body}")
 
-        # 200 — download. Volume-first if available, HTTP fallback inside.
         resp.close()
         written = _download_artifact(
             tag, job_url, out_path, volume_name, job_id,
@@ -319,12 +400,12 @@ def _run_modal_job(tag: str,
         if written < min_bytes:
             empty_count += 1
             print(f"[{tag}] WARN: 200 with only {written} bytes; "
-                  f"retry {empty_count}/5")
-            if empty_count >= 5:
+                  f"retry {empty_count}/{EMPTY_RETRY_MAX}")
+            if empty_count >= EMPTY_RETRY_MAX:
                 raise RuntimeError(
                     f"{tag} kept returning empty artifact ({written} bytes); "
                     f"job may have crashed silently. Check worker logs.")
-            time.sleep(poll_every)
+            time.sleep(_jittered(poll_every))
             continue
 
         print(f"[{tag}] done -> {out_path} ({written/1e6:.2f} MB)")
