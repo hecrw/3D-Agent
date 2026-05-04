@@ -44,118 +44,94 @@ def _stamp(prefix: str, ext: str) -> str:
     return str(OUT / f"{prefix}_{int(time.time())}.{ext}")
  
  
+import sys
+import contextlib
+import io
+
+class VerboseCapture(io.IOBase):
+    def __init__(self, callback):
+        self.callback = callback
+    def write(self, b):
+        line = b.strip()
+        if line:
+            self.callback(line)
+        return len(b)
+
+def tool_wrapper(func):
+    def wrapper(*args, **kwargs):
+        # This is a bit tricky inside LangChain tools, 
+        # but we can try to intercept prints.
+        return func(*args, **kwargs)
+    return wrapper
 
 @tool
 def tool_web_search(query: str) -> str:
-    """Search the web for facts, references, or context. Use whenever the user
-    asks about something you don't know, or you need real-world details to
-    inform a 3D asset (e.g. 'what does a Roman gladius look like?').
-    Returns up to 5 results with titles, URLs, and snippets."""
+    """Search the web for facts, references, or context."""
     return web_search(query)
-
 
 @tool
 def tool_image_search(query: str) -> str:
-    """Search the web for IMAGES of a subject. Use this when you need a
-    reference image to feed into the 3D pipeline (e.g. 'medieval longsword',
-    'art-deco lamp'). Returns image URLs — pick one and call tool_download_image
-    to pull it locally before feeding it to tool_restyle_to_objaverse / tool_trellis2."""
+    """Search the web for IMAGES of a subject."""
     urls = image_search(query)
     if not urls:
         return "No images found."
-    return "Image URLs (pick one and download with tool_download_image):\n" + \
-           "\n".join(f"- {u}" for u in urls)
-
+    return "Image URLs:\n" + "\n".join(f"- {u}" for u in urls)
 
 @tool
 def tool_download_image(url: str) -> str:
-    """Download an image from a URL and save it locally. Use after tool_image_search
-    to pull a chosen image into your workflow, or to ingest any image URL the user
-    provides. Returns the path to the saved image — pass it directly to
-    tool_restyle_to_objaverse, tool_trellis2, tool_hunyuan3d2, etc."""
+    """Download an image from a URL and save it locally."""
     out = _stamp("downloaded", "jpg")
     path = download_image(url=url, out_path=out)
     return f"Image saved: {path}"
 
-
-
 @tool
 def tool_generate_concept_image(prompt: str) -> str:
-    """Generate a concept PNG image from a text description using Gemini.
-    Use this as the first step when the user only has a text prompt and no image.
-    Returns the path to the saved PNG file."""
+    """Generate a concept PNG image from a text description."""
     out = _stamp("concept", "png")
     path = generate_concept_image(prompt=prompt, out_path=out)
     return f"Concept image saved: {path}"
- 
- 
+
 @tool
 def tool_restyle_to_objaverse(image_path: str) -> str:
-    """Restyle any photo or image into the clean Objaverse dataset style
-    (centered object, neutral background, studio lighting).
-    Always run this before feeding a real-world photo into a 3D pipeline.
-    Returns the path to the restyled PNG."""
+    """Restyle any photo or image into the clean Objaverse dataset style."""
     out = _stamp("objaverse", "png")
     path = restyle_to_objaverse(image_path=image_path, out_path=out)
     return f"Restyled image saved: {path}"
- 
- 
- 
+
 @tool
 def tool_trellis2(image_path: str) -> str:
-    """Run the TRELLIS pipeline: convert a clean image into a textured 3D GLB file.
-    Input should be an Objaverse-style image (use tool_restyle_to_objaverse first if needed).
-    Returns the path to the output .glb file."""
+    """Run the TRELLIS pipeline: convert a clean image into a textured 3D GLB file."""
     out = _stamp("model", "glb")
     path = trellis2(image_path=image_path, out_path=out)
     return f"3D model saved: {path}"
 
-
 @tool
 def tool_trellis2_texture(image_path: str, mesh_path: str) -> str:
-    """Re-texture an existing mesh using TRELLIS, guided by a reference image.
-    Use this when you already have a .glb/.obj mesh and want better textures.
-    Returns the path to the textured .glb file."""
+    """Re-texture an existing mesh using TRELLIS."""
     out = _stamp("textured", "glb")
     path = trellis2_texture(image_path=image_path, mesh_path=mesh_path, out_path=out)
     return f"Textured model saved: {path}"
- 
- 
+
 @tool
 def tool_partcrafter(image_path: str, num_parts: int = 3, scene: bool = False) -> str:
-    """Run PartCrafter: decompose an object image into N articulated parts.
-    Set scene=True to generate a full multi-object scene instead of a single asset.
-    Returns the path to the output .glb file."""
+    """Run PartCrafter: decompose an object image into N articulated parts."""
     out = _stamp("parts", "glb")
-    path = partcrafter(
-        image_path=image_path,
-        out_path=out,
-        num_parts=num_parts,
-        scene=scene,
-    )
+    path = partcrafter(image_path=image_path, out_path=out, num_parts=num_parts, scene=scene)
     return f"Part-decomposed model saved: {path}"
- 
- 
+
 @tool
 def tool_hunyuan3d2(image_path: str) -> str:
-    """Run Hunyuan3D-2: convert a clean image into a fully textured 3D GLB file.
-    Faster alternative to TRELLIS for image-to-3D with PBR textures.
-    Returns the path to the output .glb file."""
+    """Run Hunyuan3D-2: convert a clean image into a fully textured 3D GLB file."""
     out = _stamp("hunyuan", "glb")
     path = hunyuan3d2(image_path=image_path, out_path=out)
     return f"3D model saved: {path}"
 
-
 @tool
 def tool_render_mesh_views(mesh_path: str) -> str:
-    """Render 6 axis-aligned views (front/back/left/right/top/bottom) of a 3D mesh
-    as PNGs. Use to inspect what a generated GLB looks like, or to produce a
-    reference image you can feed back into another pipeline or a VLM.
-    Accepts .glb/.obj/.ply/.stl. Returns the directory containing the PNGs
-    plus the per-view paths."""
+    """Render 6 axis-aligned views of a 3D mesh as PNGs."""
     out_dir = OUT / f"views_{int(time.time())}"
     paths = render_mesh_views(mesh_path=mesh_path, out_dir=out_dir)
-    lines = [f"Rendered {len(paths)} views to {out_dir}:"]
+    lines = [f"Rendered views to {out_dir}:"]
     lines += [f"- {name}: {p}" for name, p in paths.items()]
     return "\n".join(lines)
 
@@ -192,12 +168,71 @@ agent = create_agent(
 )
 
 
-def process_chat(user_input, chat_history_list):
-    messages = chat_history_list + [{"role": "user", "content": user_input}]
+def process_chat_stream(user_input, chat_history_list):
+    """
+    Generator that yields dictionaries:
+    {"type": "status", "content": "..."}
+    {"type": "text", "content": "..."}
+    """
+    messages = []
+    for msg in chat_history_list:
+        role = "user" if msg["role"] == "user" else "assistant"
+        messages.append({"role": role, "content": msg["content"]})
+    
+    messages.append({"role": "user", "content": user_input})
     
     try:
+        # We'll use a custom stream to capture prints from tools
+        def on_print(line):
+            # Filtering out some noise
+            if any(x in line for x in ["[gemini]", "[trellis", "[hunyuan", "[tavily", "[download", "pending...", "job="]):
+                yield {"type": "status", "content": line}
+
+        # Using stream() to capture tool calls and progress
+        with contextlib.redirect_stdout(VerboseCapture(lambda x: None)): # Just to initialize
+            # This is complex because we want to yield while the stream is running.
+            # We'll use a simpler approach: wrap the agent call and use a custom tool executor if possible,
+            # but for now, let's just capture the stdout of the whole process.
+            
+            f = io.StringIO()
+            with contextlib.redirect_stdout(f):
+                for chunk in agent.stream({"messages": messages}, stream_mode="values"):
+                    # Check if new lines were printed
+                    output = f.getvalue()
+                    if output:
+                        lines = output.strip().split('\n')
+                        for line in lines:
+                            yield {"type": "status", "content": line}
+                        f.truncate(0)
+                        f.seek(0)
+
+                    if "messages" in chunk:
+                        last_msg = chunk["messages"][-1]
+                        if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                            for tc in last_msg.tool_calls:
+                                tool_name = tc["name"].replace("tool_", "").replace("_", " ")
+                                yield {"type": "status", "content": f"Initializing {tool_name}..."}
+        
+        # Finally, get the full result
         result = agent.invoke({"messages": messages})
-        reply = result["messages"][-1].content
-        return reply
+        final_text = result["messages"][-1].content
+        yield {"type": "text", "content": final_text}
+
     except Exception as e:
-        return f"Agent error: {str(e)}"
+        yield {"type": "text", "content": f"Agent error: {str(e)}"}
+
+def generate_chat_title(user_prompt):
+    """Summarizes a user prompt into a 2-4 word snappy title."""
+    try:
+        response = llm.invoke(f"Summarize this 3D generation request into a snappy 2-4 word title. Respond ONLY with the title. Prompt: {user_prompt}")
+        return response.content.strip().replace('"', '')
+    except:
+        return user_prompt[:30]
+
+# Keep the old one for compatibility if needed, but point it to the stream
+def process_chat(user_input, chat_history_list):
+    final_text = ""
+    for chunk in process_chat_stream(user_input, chat_history_list):
+        if chunk["type"] == "text":
+            final_text = chunk["content"]
+    return final_text

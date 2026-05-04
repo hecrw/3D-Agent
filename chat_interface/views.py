@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
-from .models import ChatSession, ChatMessage  # Confirmed model name
+from django.views.decorators.csrf import csrf_exempt
+from .models import ChatSession, ChatMessage
 import json
 import re
-from agent import process_chat
+from agent import process_chat, generate_chat_title
 
 # --- HELPER: CLEAN THE BOT OUTPUT ---
 def scrub_bot_text(raw_text):
@@ -39,6 +40,10 @@ def chat_detail(request, session_id):
 
 def new_chat(request):
     """Creates a session and redirects instantly."""
+    # Delete any existing sessions that have no messages to keep the history clean
+    from django.db.models import Count
+    ChatSession.objects.annotate(msg_count=Count('messages')).filter(msg_count=0).delete()
+
     # 1. Start with a default title
     initial_prompt = ""
     title = "New Chat"
@@ -49,20 +54,24 @@ def new_chat(request):
         if initial_prompt:
             title = initial_prompt[:30]
 
-    # 2. Create the session (happens for both GET and POST)
+    # 2. Create the session
     session = ChatSession.objects.create(title=title)
 
-    # 3. If it was a POST with a prompt, save the message
+    # 3. If it was a POST with a prompt, save message and generate snappy title
     if request.method == "POST" and initial_prompt:
+        # Generate snappy title
+        session.title = generate_chat_title(initial_prompt)
+        session.save()
+
         ChatMessage.objects.create(
             session=session,
             sender="user",
             text=initial_prompt
         )
     
-    # 4. ALWAYS return a redirect here (outside the 'if' block)
-    # This fixes the "Returned None" error for GET requests.
     return redirect("chat_detail", session_id=session.id)
+
+from django.http import StreamingHttpResponse
 
 def api_send_message(request, session_id):
     """This is what the JavaScript calls to get the AI's 3D response."""
@@ -71,9 +80,7 @@ def api_send_message(request, session_id):
         user_text = data.get('text')
         active_session = get_object_or_404(ChatSession, id=session_id)
 
-        # --- THE CHECK ---
-        # Get the absolute last message in this session
-        # Inside api_send_message...
+        # Ensure user message is saved
         last_msg = active_session.messages.all().order_by('created_at').last()
         if not (last_msg and last_msg.sender == "user" and last_msg.text == user_text):
             ChatMessage.objects.create(session=active_session, sender="user", text=user_text)
@@ -82,32 +89,49 @@ def api_send_message(request, session_id):
         db_messages = active_session.messages.all().order_by('created_at')
         history = [{"role": msg.sender, "content": msg.text} for msg in db_messages]
 
-        # Call your 3D Agent
-        output = process_chat(user_text, history)
-        
-        # Extract response text
-        raw_text = output[-1].get('text', str(output)) if isinstance(output, list) else str(output)
-        
-        # Path Extraction for 3D assets
-        bot_3d_path = ""
-        file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png))', raw_text)
-        if file_match:
-            bot_3d_path = f"/media/3d_outputs/{file_match.group(1)}"
+        # Auto-title if this is the first real message in a generic chat
+        if active_session.title == "New Chat" or active_session.title == user_text[:30]:
+             active_session.title = generate_chat_title(user_text)
+             active_session.save()
 
-        # Clean and supplement bot text
-        bot_text = scrub_bot_text(raw_text)
-        if bot_3d_path and "preview window" not in bot_text:
-            bot_text += "\n\nYou can view it in the preview window."
+        from agent import process_chat_stream
 
-        # Save Assistant message to DB
-        ChatMessage.objects.create(
-            session=active_session, 
-            sender="assistant", 
-            text=bot_text, 
-            object_path=bot_3d_path
-        )
+        def event_stream():
+            bot_text = ""
+            bot_3d_path = ""
+            
+            for event in process_chat_stream(user_text, history):
+                if event["type"] == "status":
+                    yield f"data: {json.dumps(event)}\n\n"
+                elif event["type"] == "text":
+                    raw_text = event["content"]
+                    
+                    # Path Extraction for 3D assets
+                    file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png))', raw_text)
+                    if file_match:
+                        bot_3d_path = f"/media/3d_outputs/{file_match.group(1)}"
 
-        return JsonResponse({"text": bot_text, "3d_object_path": bot_3d_path})
+                    # Clean and supplement bot text
+                    bot_text = scrub_bot_text(raw_text)
+                    if bot_3d_path and "preview window" not in bot_text:
+                        bot_text += "\n\nYou can view it in the chat."
+
+                    # Save Assistant message to DB
+                    ChatMessage.objects.create(
+                        session=active_session, 
+                        sender="assistant", 
+                        text=bot_text, 
+                        object_path=bot_3d_path
+                    )
+                    
+                    final_data = {
+                        "type": "final",
+                        "text": bot_text,
+                        "3d_object_path": bot_3d_path
+                    }
+                    yield f"data: {json.dumps(final_data)}\n\n"
+
+        return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
 
     return JsonResponse({"error": "Invalid method"}, status=400)
 
@@ -125,6 +149,16 @@ def rename_chat(request, session_id):
         chat.title = new_title
         chat.save()
     return redirect('chat_detail', session_id=session_id)
+
+
+@csrf_exempt # Or ensure CSRF is handled in fetch
+def api_delete_assets(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        ids = data.get('ids', [])
+        ChatMessage.objects.filter(id__in=ids).delete()
+        return JsonResponse({"status": "success"})
+    return JsonResponse({"error": "Invalid method"}, status=400)
 
 
 def gallery(request):

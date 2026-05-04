@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/chat/<int:session_id>/message/', views.api_send_message, name='api_send_message'),
     
     path('gallery/', views.gallery, name='gallery'),
+    path('api/gallery/delete/', views.api_delete_assets, name='api_delete_assets'),
 ]
 
 # This tells Django: "If someone asks for /media/..., look in the MEDIA_ROOT folder"
