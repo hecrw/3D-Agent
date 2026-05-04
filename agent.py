@@ -19,9 +19,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ---------------------------------------------------------------------------
-# 1. Tools
-# ---------------------------------------------------------------------------
 
 from tools import (
     generate_concept_image,
@@ -39,17 +36,13 @@ import os
 from django.conf import settings
 from pathlib import Path
 
-# This tells the agent to save everything inside your Django media folder
-# instead of a random folder in your root directory.
 OUT = Path(settings.MEDIA_ROOT) / "3d_outputs"
 OUT.mkdir(parents=True, exist_ok=True)
 
 def _stamp(prefix: str, ext: str) -> str:
-    # This stays the same, it just uses the new OUT path from above
     return str(OUT / f"{prefix}_{int(time.time())}.{ext}")
  
  
-# ── Stage 0: research / reference fetching ───────────────────────────────────
 
 @tool
 def tool_web_search(query: str) -> str:
@@ -84,7 +77,6 @@ def tool_download_image(url: str) -> str:
     return f"Image saved: {path}"
 
 
-# ── Stage 1: image preparation ───────────────────────────────────────────────
 
 @tool
 def tool_generate_concept_image(prompt: str) -> str:
@@ -107,7 +99,6 @@ def tool_restyle_to_objaverse(image_path: str) -> str:
     return f"Restyled image saved: {path}"
  
  
-# ── Stage 2: 3D generation ───────────────────────────────────────────────────
  
 @tool
 def tool_trellis2(image_path: str) -> str:
@@ -154,7 +145,6 @@ def tool_hunyuan3d2(image_path: str) -> str:
     return f"3D model saved: {path}"
 
 
-# ── exported list ─────────────────────────────────────────────────────────────
  
 ALL_TOOLS = [
     tool_web_search,
@@ -169,9 +159,6 @@ ALL_TOOLS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# 2. LLM — change model= to any model you've pulled via `ollama pull <name>`
-# ---------------------------------------------------------------------------
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 llm = ChatGoogleGenerativeAI(
@@ -179,24 +166,17 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.2
 )
 
-# ---------------------------------------------------------------------------
-# 3. Agent (LangGraph ReAct — works with langchain 1.x)
-# ---------------------------------------------------------------------------
-from langgraph.prebuilt import create_react_agent
-agent = create_react_agent(
+from langchain.agents import create_agent
+agent = create_agent(
     model=llm,
     tools=ALL_TOOLS,
-    prompt="""You are a helpful assistant.
+    system_prompt="""You are a helpful assistant.
     make conversation with the user, ut if his request can be 
     done using the tools you have use the tools to fullfill his request""",
 )
 
-# ---------------------------------------------------------------------------
-# 4. Exposed Function
-# ---------------------------------------------------------------------------
 
 def process_chat(user_input, chat_history_list):
-    # chat_history_list should be a list of dicts: [{"role": "user", "content": "..."}, ...]
     messages = chat_history_list + [{"role": "user", "content": user_input}]
     
     try:

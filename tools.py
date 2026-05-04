@@ -106,9 +106,6 @@ def restyle_to_objaverse(image_path: str | Path,
     return path
 
 
-# ---------------------------------------------------------------------------
-# Web + image search (Tavily) and image download
-# ---------------------------------------------------------------------------
 TAVILY_URL = "https://api.tavily.com/search"
 
 
@@ -161,40 +158,9 @@ def download_image(url: str, out_path: str | Path | None = None) -> str:
     with open(out_path, "wb") as f:
         for chunk in r.iter_content(8192):
             f.write(chunk)
-    # Validate it's actually an image (Tavily occasionally returns dead links).
     Image.open(out_path).verify()
     print(f"[download] saved {out_path}")
     return out_path
-
-
-def _compact_mesh_for_upload(mesh_path: str | Path,
-                             strip_textures: bool = True) -> str:
-    """Return a path whose bytes will fit through the Modal proxy.
-
-    Strips embedded textures (lossless for pipelines that re-texture from
-    scratch), gzips, and returns a temp file path. Falls back to the original
-    file if it already fits.
-    """
-    mesh_path = str(mesh_path)
-    if os.path.getsize(mesh_path) and not strip_textures:
-        return mesh_path
-
-    import trimesh
-    m = trimesh.load(mesh_path, force="mesh")
-    if strip_textures:
-        m.visual = trimesh.visual.ColorVisuals(mesh=m)
-    buf = io.BytesIO()
-    m.export(buf, file_type="glb")
-    raw = buf.getvalue()
-
-    payload, suffix = raw, ".glb"
-
-    fd, tmp = tempfile.mkstemp(suffix=suffix, prefix="upload_")
-    with os.fdopen(fd, "wb") as f:
-        f.write(payload)
-    print(f"[upload] {mesh_path} -> {tmp} "
-          f"({os.path.getsize(mesh_path)/1e6:.1f} MB -> {len(payload)/1e6:.1f} MB)")
-    return tmp
 
 
 def _download_via_volume(volume_name: str, remote_name: str,
@@ -218,6 +184,47 @@ def _download_via_volume(volume_name: str, remote_name: str,
     return os.path.getsize(out_path)
 
 
+def _stream_to_file(resp, out_path: str) -> int:
+    """Stream an HTTP response body to a file. Returns bytes written."""
+    written = 0
+    with open(out_path, "wb") as fh:
+        for chunk in resp.iter_content(chunk_size=1 << 20):
+            if chunk:
+                fh.write(chunk)
+                written += len(chunk)
+    return written
+
+
+def _download_artifact(tag: str, job_url: str, out_path: str,
+                       volume_name: Optional[str], job_id: str,
+                       remote_suffix: str, read_timeout: int) -> int:
+    """Pull the finished artifact. Volume-first (faster), HTTP fallback."""
+    if volume_name:
+        try:
+            print(f"[{tag}] downloading from volume {volume_name}")
+            return _download_via_volume(
+                volume_name, f"{job_id}{remote_suffix}", out_path)
+        except Exception as e:
+            print(f"[{tag}] volume download failed ({e}); falling back to HTTP")
+    with requests.get(job_url, stream=True, timeout=(10, read_timeout)) as r:
+        return _stream_to_file(r, out_path)
+
+
+def _check_transient_budget(tag: str, started_at: Optional[float],
+                            budget_s: int, what: str) -> float:
+    """Track how long we've been seeing transient errors. Raises if over budget.
+
+    Returns the (possibly newly-set) start timestamp.
+    """
+    started_at = started_at or time.time()
+    elapsed = time.time() - started_at
+    if elapsed > budget_s:
+        raise RuntimeError(
+            f"{tag} transient errors for {elapsed:.0f}s (>{budget_s}s): {what}")
+    print(f"[{tag}] {what}; retrying ({elapsed:.0f}s/{budget_s}s)")
+    return started_at
+
+
 def _run_modal_job(tag: str,
                    submit_url: str,
                    base_url: str,
@@ -237,25 +244,22 @@ def _run_modal_job(tag: str,
     `files` is a dict of {field: open_path_str}. We open and stream each.
     Returns the path to the downloaded artifact.
     """
+    # ── 1. Submit with exponential backoff ────────────────────────────────────
     print(f"[{tag}] submit -> {submit_url}")
     job_id: Optional[str] = None
     last_err: Optional[Exception] = None
     for attempt in range(1, submit_retries + 1):
         opened = {k: open(v, "rb") for k, v in files.items()}
         try:
-            r = requests.post(
-                submit_url, files=opened, data=form,
-                timeout=(10, submit_read_timeout),
-            )
+            r = requests.post(submit_url, files=opened, data=form,
+                              timeout=(10, submit_read_timeout))
             if r.status_code >= 500:
                 raise requests.exceptions.HTTPError(
                     f"{r.status_code}: {r.text[:200]}", response=r)
             r.raise_for_status()
             job_id = r.json()["job_id"]
             break
-        except (requests.exceptions.ReadTimeout,
-                requests.exceptions.ConnectionError,
-                requests.exceptions.HTTPError) as e:
+        except requests.exceptions.RequestException as e:
             last_err = e
             wait = min(60, 10 * (2 ** (attempt - 1)))
             print(f"[{tag}] submit {attempt}/{submit_retries} failed "
@@ -268,104 +272,63 @@ def _run_modal_job(tag: str,
         raise RuntimeError(f"{tag} submit failed after {submit_retries}: {last_err}")
     print(f"[{tag}] job={job_id}")
 
+    # ── 2. Poll until 200 or budget exhausted ─────────────────────────────────
     job_url = f"{base_url}/jobs/{job_id}"
-    tiny_count = 0
-    transient_since: Optional[float] = None 
+    transient_since: Optional[float] = None
+    empty_count = 0
+
     while True:
         try:
-            resp = requests.get(job_url, timeout=(10, download_read_timeout),
-                                stream=True)
-        except (requests.exceptions.ReadTimeout,
-                requests.exceptions.ConnectionError) as e:
-            if transient_since is None:
-                transient_since = time.time()
-            elapsed = time.time() - transient_since
-            if elapsed > cold_start_budget_s:
-                raise RuntimeError(
-                    f"{tag} poll kept failing for {elapsed:.0f}s "
-                    f"({type(e).__name__}); giving up. Last err: {e}")
-            print(f"[{tag}] poll error ({type(e).__name__}); "
-                  f"retrying ({elapsed:.0f}s/{cold_start_budget_s}s)")
+            resp = requests.get(job_url, timeout=(10, download_read_timeout))
+        except requests.exceptions.RequestException as e:
+            transient_since = _check_transient_budget(
+                tag, transient_since, cold_start_budget_s,
+                f"poll error ({type(e).__name__})")
             time.sleep(poll_every)
             continue
 
-        if resp.status_code == 200:
-            content_length = resp.headers.get("content-length")
-            # Drain/close HTTP body — we only used it as a "ready" signal.
-            # The HTTP FileResponse path is much slower than reading the
-            # volume directly, so prefer the SDK if a volume name is given.
-            if volume_name is not None:
-                resp.close()
-                print(f"[{tag}] downloading from volume {volume_name}")
-                try:
-                    written = _download_via_volume(
-                        volume_name, f"{job_id}{remote_suffix}", out_path)
-                except Exception as e:
-                    print(f"[{tag}] volume download failed ({e}); "
-                          f"falling back to HTTP")
-                    written = 0
-                if written < min_bytes:
-                    with open(out_path, "wb") as out:
-                        with requests.get(job_url, stream=True,
-                                          timeout=(10, download_read_timeout)
-                                          ) as r2:
-                            for chunk in r2.iter_content(chunk_size=1 << 20):
-                                if chunk:
-                                    out.write(chunk)
-                                    written += len(chunk)
-            else:
-                written = 0
-                with open(out_path, "wb") as out:
-                    for chunk in resp.iter_content(chunk_size=1 << 20):
-                        if chunk:
-                            out.write(chunk)
-                            written += len(chunk)
-                resp.close()
-            if written < min_bytes:
-                # Server says done but body is empty/tiny. Common causes:
-                #   - FileResponse opened the path before the worker
-                #     finished flushing/committing (race condition).
-                #   - Worker crashed after creating an empty file.
-                # Treat as transient and re-poll a few times before bailing.
-                tiny_count += 1
-                print(f"[{tag}] WARN: 200 with only {written} bytes "
-                      f"(content-length={content_length}); retry {tiny_count}/5")
-                if tiny_count >= 5:
-                    raise RuntimeError(
-                        f"{tag} kept returning empty artifact "
-                        f"({written} bytes); job may have crashed silently. "
-                        f"Inspect with `modal volume ls trellis2-jobs` and "
-                        f"check worker logs in the Modal dashboard.")
-                time.sleep(poll_every)
-                continue
-            print(f"[{tag}] done -> {out_path} ({written/1e6:.2f} MB)")
-            return out_path
-        if resp.status_code == 202:
+        status = resp.status_code
+
+        if status == 202:
             resp.close()
-            transient_since = None  # got a real response, reset budget
+            transient_since = None
             print(f"[{tag}] pending...")
             time.sleep(poll_every)
             continue
-        # 5xx during cold start = Modal edge / container not ready.
-        # Treat as transient until cold_start_budget_s elapses since first
-        # bad response. 4xx is a real client/server error — fail fast.
-        if resp.status_code >= 500:
-            body = resp.text[:500]
+
+        if status >= 500:
+            body = resp.text[:200]
             resp.close()
-            if transient_since is None:
-                transient_since = time.time()
-            elapsed = time.time() - transient_since
-            if elapsed > cold_start_budget_s:
-                raise RuntimeError(
-                    f"{tag} {resp.status_code} for {elapsed:.0f}s "
-                    f"(>{cold_start_budget_s}s budget): {body}")
-            print(f"[{tag}] {resp.status_code} (cold start?); "
-                  f"retrying ({elapsed:.0f}s/{cold_start_budget_s}s): {body[:120]}")
+            transient_since = _check_transient_budget(
+                tag, transient_since, cold_start_budget_s,
+                f"{status} (cold start?): {body[:120]}")
             time.sleep(poll_every)
             continue
-        body = resp.text[:500]
+
+        if status != 200:
+            body = resp.text[:500]
+            resp.close()
+            raise RuntimeError(f"{tag} error {status}: {body}")
+
+        # 200 — download. Volume-first if available, HTTP fallback inside.
         resp.close()
-        raise RuntimeError(f"{tag} error {resp.status_code}: {body}")
+        written = _download_artifact(
+            tag, job_url, out_path, volume_name, job_id,
+            remote_suffix, download_read_timeout)
+
+        if written < min_bytes:
+            empty_count += 1
+            print(f"[{tag}] WARN: 200 with only {written} bytes; "
+                  f"retry {empty_count}/5")
+            if empty_count >= 5:
+                raise RuntimeError(
+                    f"{tag} kept returning empty artifact ({written} bytes); "
+                    f"job may have crashed silently. Check worker logs.")
+            time.sleep(poll_every)
+            continue
+
+        print(f"[{tag}] done -> {out_path} ({written/1e6:.2f} MB)")
+        return out_path
 
 
 def trellis2(image_path: str | Path,
