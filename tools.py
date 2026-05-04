@@ -7,6 +7,10 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Optional
+import trimesh
+import pyrender
+import numpy as np
+from PIL import Image
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -529,6 +533,142 @@ def hunyuan3d2(image_path: str | Path,
         **job_kwargs,
     )
 
+
+_FACE_DIRS = {
+    "front":  ( 0,  0,  1),
+    "back":   ( 0,  0, -1),
+    "left":   (-1,  0,  0),
+    "right":  ( 1,  0,  0),
+    "top":    ( 0,  1,  0),
+    "bottom": ( 0, -1,  0),
+}
+_CORNER_DIRS = {
+    "front_top_right":    ( 1,  1,  1),
+    "front_top_left":     (-1,  1,  1),
+    "front_bottom_right": ( 1, -1,  1),
+    "front_bottom_left":  (-1, -1,  1),
+    "back_top_right":     ( 1,  1, -1),
+    "back_top_left":      (-1,  1, -1),
+    "back_bottom_right":  ( 1, -1, -1),
+    "back_bottom_left":   (-1, -1, -1),
+}
+_VIEW_PRESETS = {
+    "default": list(_FACE_DIRS),                       # 6 axis-aligned
+    "corners": list(_CORNER_DIRS),                     # 8 diagonals
+    "all":     list(_FACE_DIRS) + list(_CORNER_DIRS),  # 14 total
+}
+
+
+def _look_at(camera_position, target=(0.0, 0.0, 0.0), up=(0.0, 1.0, 0.0)):
+    """Build a camera-to-world matrix (OpenGL convention: looking down -Z)."""
+    import numpy as np
+    cam = np.array(camera_position, dtype=float)
+    tgt = np.array(target,          dtype=float)
+    u   = np.array(up,              dtype=float)
+
+    forward = tgt - cam
+    forward /= np.linalg.norm(forward)
+
+    if abs(np.dot(forward, u)) > 0.999:
+        u = np.array([0.0, 0.0, 1.0])
+        if abs(np.dot(forward, u)) > 0.999:
+            u = np.array([1.0, 0.0, 0.0])
+
+    right = np.cross(forward, u); right /= np.linalg.norm(right)
+    true_up = np.cross(right, forward)
+
+    mat = np.eye(4)
+    mat[:3, 0] = right
+    mat[:3, 1] = true_up
+    mat[:3, 2] = -forward
+    mat[:3, 3] = cam
+    return mat
+
+
+def render_mesh_views(mesh_path: str | Path,
+                      out_dir: str | Path,
+                      views: str | list[str] = "default",
+                      image_size: int = 512,
+                      distance: float = 3.0) -> dict[str, str]:
+    """Render named camera views of a mesh as PNGs.
+
+    Args:
+        mesh_path:  any format trimesh can load (.glb/.obj/.ply/.stl).
+        out_dir:    directory to write `<view>.png` files into. Created if missing.
+        views:      one of "default" (6 face views), "corners" (8 diagonals),
+                    "all" (14), or a custom list of view names. Names come from
+                    {front, back, left, right, top, bottom, front_top_right, ...}.
+        image_size: square render resolution.
+        distance:   camera distance from origin (mesh is normalized to fit a unit
+                    cube, so 3.0 keeps the whole mesh comfortably in frame).
+
+    Returns: dict mapping view name -> saved PNG path.
+    """
+    # Lazy imports — keeps tools.py importable on machines without GL.
+    import numpy as np
+    import pyrender
+    import trimesh
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resolve view selection.
+    if isinstance(views, str):
+        if views not in _VIEW_PRESETS:
+            raise ValueError(
+                f"unknown views preset {views!r}; "
+                f"use one of {list(_VIEW_PRESETS)} or pass a list of names")
+        view_names = _VIEW_PRESETS[views]
+    else:
+        view_names = list(views)
+    all_dirs = {**_FACE_DIRS, **_CORNER_DIRS}
+    unknown = [v for v in view_names if v not in all_dirs]
+    if unknown:
+        raise ValueError(f"unknown view name(s): {unknown}; "
+                         f"valid: {list(all_dirs)}")
+
+    # Load mesh, normalize into a unit cube around the origin.
+    loaded = trimesh.load(str(mesh_path))
+    scene = pyrender.Scene(ambient_light=[0.4, 0.4, 0.4])
+
+    if isinstance(loaded, trimesh.Scene):
+        geometries = [g.copy() for g in loaded.geometry.values()]
+        combined = trimesh.util.concatenate(geometries)
+        center = combined.bounds.mean(axis=0)
+        scale = 2.0 / max(combined.extents)
+        for g in geometries:
+            g.apply_translation(-center)
+            g.apply_scale(scale)
+            scene.add(pyrender.Mesh.from_trimesh(g, smooth=False))
+    else:
+        mesh = loaded.copy()
+        center = mesh.bounds.mean(axis=0)
+        scale = 2.0 / max(mesh.extents)
+        mesh.apply_translation(-center)
+        mesh.apply_scale(scale)
+        scene.add(pyrender.Mesh.from_trimesh(mesh, smooth=False))
+
+    camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
+    cam_node = scene.add(camera)
+    scene.add(
+        pyrender.DirectionalLight(color=np.ones(3), intensity=3.0),
+        parent_node=cam_node,
+    )
+
+    renderer = pyrender.OffscreenRenderer(image_size, image_size)
+    paths: dict[str, str] = {}
+    try:
+        for name in view_names:
+            pos = tuple(c * distance for c in all_dirs[name])
+            scene.set_pose(cam_node, _look_at(pos))
+            color, _ = renderer.render(scene)
+            out_path = str(out_dir / f"{name}.png")
+            Image.fromarray(color).save(out_path)
+            paths[name] = out_path
+            print(f"[views] {name} -> {out_path}")
+    finally:
+        renderer.delete()
+    return paths
 
 def test():
     generate_concept_image("a cat with a hat and boots", "media/2d_outputs/cat.jpeg")

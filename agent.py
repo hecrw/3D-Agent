@@ -30,6 +30,7 @@ from tools import (
     web_search,
     image_search,
     download_image,
+    render_mesh_views,
 )
  
 import os
@@ -145,6 +146,20 @@ def tool_hunyuan3d2(image_path: str) -> str:
     return f"3D model saved: {path}"
 
 
+@tool
+def tool_render_mesh_views(mesh_path: str) -> str:
+    """Render 6 axis-aligned views (front/back/left/right/top/bottom) of a 3D mesh
+    as PNGs. Use to inspect what a generated GLB looks like, or to produce a
+    reference image you can feed back into another pipeline or a VLM.
+    Accepts .glb/.obj/.ply/.stl. Returns the directory containing the PNGs
+    plus the per-view paths."""
+    out_dir = OUT / f"views_{int(time.time())}"
+    paths = render_mesh_views(mesh_path=mesh_path, out_dir=out_dir)
+    lines = [f"Rendered {len(paths)} views to {out_dir}:"]
+    lines += [f"- {name}: {p}" for name, p in paths.items()]
+    return "\n".join(lines)
+
+
  
 ALL_TOOLS = [
     tool_web_search,
@@ -156,6 +171,7 @@ ALL_TOOLS = [
     tool_trellis2_texture,
     tool_partcrafter,
     tool_hunyuan3d2,
+    tool_render_mesh_views,
 ]
 
 
