@@ -12,7 +12,7 @@ class ChatSession(models.Model):
         ordering = ['-created_at'] # Newest chats at the top
 
 class ChatMessage(models.Model):
-    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="messages")
+    session = models.ForeignKey(ChatSession, on_delete=models.SET_NULL, null=True, related_name="messages")
     sender = models.CharField(max_length=50) # 'user' or 'assistant'
     text = models.TextField()
     object_path = models.URLField(blank=True, null=True) # For the 3D GLB file

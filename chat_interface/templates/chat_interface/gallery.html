@@ -3,67 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Model Gallery</title>
+    <title>Gallery | 3D Agent</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <style>
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        
+        .glass {
+            background: rgba(23, 23, 26, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .asset-card.selected {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+        }
+        
+        .checkbox-container input:checked ~ .checkmark {
+            background-color: #6366f1;
+            border-color: #6366f1;
+        }
+
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body class="bg-[#1a1a1a] text-gray-200 h-screen flex overflow-hidden font-sans">
+<body class="bg-[#0e0e11] text-[#e3e3e3] h-screen flex overflow-hidden">
 
-    <div class="w-64 bg-[#232323] border-r border-gray-700 flex flex-col p-4">
-        <h2 class="text-xs text-gray-400 font-semibold mb-4 tracking-wider">CHATS</h2>
-        
-        <a href="{% url 'new_chat' %}" class="bg-[#333333] hover:bg-[#404040] text-sm text-left px-4 py-2 rounded-md mb-2 transition text-center block">+ New chat</a>
-        
-        <a href="{% url 'gallery' %}" class="bg-[#2d2d3b] text-indigo-400 border border-indigo-500/30 text-sm text-left px-4 py-2 rounded-md mb-6 transition block text-center">Gallery</a>
-        
-        <div class="space-y-2 flex-1 overflow-y-auto">
+    <!-- SIDEBAR -->
+    <aside class="w-72 bg-[#131316] border-r border-[#232326] flex flex-col transition-all duration-300">
+        <div class="p-6">
+            <a href="{% url 'index' %}" class="flex items-center gap-2 mb-8 hover:opacity-80 transition">
+                <div class="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-white">3D</div>
+                <span class="text-lg font-semibold tracking-tight">3D Agent</span>
+            </a>
+            
+            <a href="{% url 'new_chat' %}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#1e1e23] text-[#a0a0a5] hover:text-white text-sm font-medium transition mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                New Generation
+            </a>
+            
+            <a href="{% url 'gallery' %}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 text-sm font-medium transition mb-8">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                Gallery
+            </a>
+        </div>
+
+        <div class="flex-1 overflow-y-auto px-4 space-y-1">
+            <div class="px-2 text-[10px] font-bold text-[#555] uppercase tracking-[0.1em] mb-2">Recent Chats</div>
             {% for session in all_sessions %}
-                <div class="text-sm px-4 py-2 rounded-md flex justify-between items-center group transition text-gray-400 hover:bg-[#333333]">
-                    <a href="{% url 'chat_detail' session.id %}" class="flex-1 truncate block">{{ session.title }}</a>
-                </div>
+                <a href="{% url 'chat_detail' session.id %}" class="block px-3 py-2.5 rounded-lg text-sm text-[#888] hover:bg-[#1e1e23] hover:text-[#ccc] transition truncate">
+                    {{ session.title }}
+                </a>
             {% endfor %}
         </div>
-    </div>
+    </aside>
 
-    <div class="flex-1 overflow-y-auto p-8">
-        <div class="max-w-6xl mx-auto">
-            <h1 class="text-2xl font-bold mb-2 text-white">Your 3D Assets</h1>
-            <p class="text-sm text-gray-400 mb-8">All objects generated across your chat sessions.</p>
+    <!-- MAIN AREA -->
+    <main class="flex-1 flex flex-col min-w-0 bg-[#0e0e11] overflow-y-auto">
+        
+        <header class="sticky top-0 z-10 px-8 py-6 glass border-b-0 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-semibold tracking-tight">Asset Gallery</h1>
+                <p class="text-xs text-[#555] mt-1 uppercase tracking-widest font-bold">Manage your generated models & concepts</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="select-mode-btn" class="px-4 py-2 rounded-xl border border-[#232326] text-sm font-medium hover:bg-[#1e1e23] transition">
+                    Select Multiple
+                </button>
+                <button id="delete-selected-btn" class="hidden px-4 py-2 rounded-xl bg-red-500/10 text-red-400 text-sm font-medium hover:bg-red-500/20 transition">
+                    Delete Selected (<span id="selected-count">0</span>)
+                </button>
+            </div>
+        </header>
 
+        <div class="p-8 md:p-12">
             {% if assets %}
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
                     {% for asset in assets %}
-                        <div class="bg-[#232323] border border-gray-700 rounded-xl overflow-hidden flex flex-col hover:border-indigo-500/50 transition">
+                        <div class="asset-card relative group flex flex-col bg-[#131316] rounded-2xl border border-[#232326] overflow-hidden transition-all hover:scale-[1.02] hover:shadow-2xl fade-in" 
+                             data-id="{{ asset.id }}">
                             
-                            <div class="h-64 bg-[#1a1a1a] relative">
-                                <model-viewer src="{{ asset.object_path }}" auto-rotate camera-controls style="width: 100%; height: 100%;" class="bg-[#1a1a1a]"></model-viewer>
+                            <!-- Checkbox overlay -->
+                            <div class="checkbox-container absolute top-4 left-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <input type="checkbox" class="asset-checkbox w-5 h-5 rounded-md border-[#333] bg-black/50 text-indigo-500 focus:ring-indigo-500 transition cursor-pointer">
+                            </div>
+
+                            <div class="h-64 bg-[#0a0a0c] relative">
+                                {% if ".glb" in asset.object_path %}
+                                    <model-viewer src="{{ asset.object_path }}" auto-rotate camera-controls style="width: 100%; height: 100%;"></model-viewer>
+                                {% else %}
+                                    <img src="{{ asset.object_path }}" class="w-full h-full object-cover" alt="Generated concept">
+                                {% endif %}
+                                <div class="absolute bottom-3 right-3">
+                                    <span class="px-2 py-1 bg-black/60 backdrop-blur-md rounded-md text-[9px] font-bold text-white/50 uppercase tracking-tighter border border-white/5">
+                                        {% if ".glb" in asset.object_path %}3D Model{% else %}Concept{% endif %}
+                                    </span>
+                                </div>
                             </div>
                             
-                            <div class="p-4">
-                                <p class="text-xs text-indigo-400 mb-1">From: {{ asset.session.title }}</p>
-                                <p class="text-sm text-gray-300 line-clamp-2" title="{{ asset.text }}">"{{ asset.text }}"</p>
-                                <div class="mt-4 flex justify-between items-center">
-                                    <span class="text-xs text-gray-500">{{ asset.created_at|date:"M d, Y" }}</span>
-                                    <a href="{{ asset.object_path }}" download class="text-xs bg-[#333333] hover:bg-[#404040] px-3 py-1 rounded text-white transition">Download .glb</a>
+                            <div class="p-5 flex-1 flex flex-col">
+                                <div class="flex-1 mb-4">
+                                    <p class="text-[10px] font-bold text-indigo-500/70 uppercase tracking-widest mb-1">
+                                        {% if asset.session %}From: {{ asset.session.title }}{% else %}Standalone Asset{% endif %}
+                                    </p>
+                                    <p class="text-sm text-[#bbb] line-clamp-2 italic leading-relaxed">"{{ asset.text|truncatewords:20 }}"</p>
+                                </div>
+                                
+                                <div class="flex items-center justify-between mt-auto pt-4 border-t border-[#232326]">
+                                    <span class="text-[10px] font-medium text-[#555]">{{ asset.created_at|date:"M d, Y" }}</span>
+                                    <div class="flex gap-2">
+                                        <a href="{{ asset.object_path }}" download class="p-2 rounded-lg bg-[#1e1e23] hover:bg-[#25252b] text-[#888] hover:text-white transition">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                        </a>
+                                        <button onclick="deleteSingle({{ asset.id }})" class="p-2 rounded-lg bg-red-500/5 hover:bg-red-500/10 text-red-500/50 hover:text-red-400 transition">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     {% endfor %}
                 </div>
             {% else %}
-                <div class="text-center py-20 bg-[#232323] border border-dashed border-gray-700 rounded-xl">
-                    <p class="text-gray-400 mb-4">No 3D objects generated yet.</p>
-                    <a href="{% url 'new_chat' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition text-sm">Start a chat to generate one</a>
+                <div class="flex flex-col items-center justify-center py-32 text-center opacity-50">
+                    <div class="w-20 h-20 rounded-3xl bg-[#1e1e23] flex items-center justify-center mb-6">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                    </div>
+                    <h2 class="text-xl font-medium mb-2">Your gallery is empty</h2>
+                    <p class="text-sm text-[#555] max-w-xs mx-auto">Start a new generation to see your assets appear here.</p>
                 </div>
             {% endif %}
         </div>
-    </div>
 
+    </main>
+
+    <script>
+        const selectModeBtn = document.getElementById('select-mode-btn');
+        const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+        const selectedCountSpan = document.getElementById('selected-count');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
+        let selectMode = false;
+
+        selectModeBtn.addEventListener('click', () => {
+            selectMode = !selectMode;
+            selectModeBtn.innerText = selectMode ? 'Cancel Selection' : 'Select Multiple';
+            selectModeBtn.classList.toggle('bg-indigo-500/10', selectMode);
+            selectModeBtn.classList.toggle('text-indigo-400', selectMode);
+            
+            document.querySelectorAll('.checkbox-container').forEach(c => {
+                c.classList.toggle('opacity-100', selectMode);
+            });
+            
+            if (!selectMode) {
+                document.querySelectorAll('.asset-checkbox').forEach(cb => cb.checked = false);
+                updateSelectedUI();
+            }
+        });
+
+        document.querySelectorAll('.asset-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateSelectedUI);
+        });
+
+        function updateSelectedUI() {
+            const selected = document.querySelectorAll('.asset-checkbox:checked');
+            selectedCountSpan.innerText = selected.length;
+            
+            if (selected.length > 0) {
+                deleteSelectedBtn.classList.remove('hidden');
+            } else {
+                deleteSelectedBtn.classList.add('hidden');
+            }
+
+            document.querySelectorAll('.asset-card').forEach(card => {
+                const cb = card.querySelector('.asset-checkbox');
+                card.classList.toggle('selected', cb.checked);
+            });
+        }
+
+        async function deleteSingle(id) {
+            if (!confirm('Are you sure you want to delete this asset?')) return;
+            await performDelete([id]);
+        }
+
+        deleteSelectedBtn.addEventListener('click', async () => {
+            const selected = Array.from(document.querySelectorAll('.asset-checkbox:checked'))
+                                .map(cb => cb.closest('.asset-card').dataset.id);
+            
+            if (!confirm(`Delete ${selected.length} assets?`)) return;
+            await performDelete(selected);
+        });
+
+        async function performDelete(ids) {
+            try {
+                const response = await fetch('/api/gallery/delete/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ ids: ids })
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error deleting assets.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Connection error.');
+            }
+        }
+    </script>
 </body>
 </html>
