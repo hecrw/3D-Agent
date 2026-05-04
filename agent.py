@@ -30,9 +30,9 @@ from tools import (
     trellis2_texture,
     partcrafter,
     hunyuan3d2,
-    hunyuan3d2_texture,
-    hunyuan3d_part_segment,
-    hunyuan3d_part_decompose,
+    web_search,
+    image_search,
+    download_image,
 )
  
 import os
@@ -49,8 +49,43 @@ def _stamp(prefix: str, ext: str) -> str:
     return str(OUT / f"{prefix}_{int(time.time())}.{ext}")
  
  
+# ── Stage 0: research / reference fetching ───────────────────────────────────
+
+@tool
+def tool_web_search(query: str) -> str:
+    """Search the web for facts, references, or context. Use whenever the user
+    asks about something you don't know, or you need real-world details to
+    inform a 3D asset (e.g. 'what does a Roman gladius look like?').
+    Returns up to 5 results with titles, URLs, and snippets."""
+    return web_search(query)
+
+
+@tool
+def tool_image_search(query: str) -> str:
+    """Search the web for IMAGES of a subject. Use this when you need a
+    reference image to feed into the 3D pipeline (e.g. 'medieval longsword',
+    'art-deco lamp'). Returns image URLs — pick one and call tool_download_image
+    to pull it locally before feeding it to tool_restyle_to_objaverse / tool_trellis2."""
+    urls = image_search(query)
+    if not urls:
+        return "No images found."
+    return "Image URLs (pick one and download with tool_download_image):\n" + \
+           "\n".join(f"- {u}" for u in urls)
+
+
+@tool
+def tool_download_image(url: str) -> str:
+    """Download an image from a URL and save it locally. Use after tool_image_search
+    to pull a chosen image into your workflow, or to ingest any image URL the user
+    provides. Returns the path to the saved image — pass it directly to
+    tool_restyle_to_objaverse, tool_trellis2, tool_hunyuan3d2, etc."""
+    out = _stamp("downloaded", "jpg")
+    path = download_image(url=url, out_path=out)
+    return f"Image saved: {path}"
+
+
 # ── Stage 1: image preparation ───────────────────────────────────────────────
- 
+
 @tool
 def tool_generate_concept_image(prompt: str) -> str:
     """Generate a concept PNG image from a text description using Gemini.
@@ -119,56 +154,18 @@ def tool_hunyuan3d2(image_path: str) -> str:
     return f"3D model saved: {path}"
 
 
-@tool
-def tool_hunyuan3d2_texture(image_path: str, mesh_path: str) -> str:
-    """Re-texture an existing mesh using Hunyuan3D-2 Paint, guided by a reference image.
-    Accepts .glb/.obj/.ply/.stl. Use when you already have a mesh and want PBR textures.
-    Returns the path to the textured .glb file."""
-    out = _stamp("hunyuan_textured", "glb")
-    path = hunyuan3d2_texture(image_path=image_path, mesh_path=mesh_path, out_path=out)
-    return f"Textured model saved: {path}"
-
-
-@tool
-def tool_hunyuan3d_part_segment(mesh_path: str) -> str:
-    """Segment an existing 3D mesh into semantic parts using Hunyuan3D-Part / P3-SAM.
-    Input is any .glb/.obj/.ply/.stl. Output is the same mesh with each face tagged
-    by part (visible as colored regions). Use this when you want to know what parts
-    a mesh contains without changing its geometry.
-    Returns the path to the labelled .glb file."""
-    out = _stamp("part_seg", "glb")
-    path = hunyuan3d_part_segment(mesh_path=mesh_path, out_path=out)
-    return f"Segmented model saved: {path}"
-
-
-@tool
-def tool_hunyuan3d_part_decompose(mesh_path: str) -> str:
-    """Decompose an existing 3D mesh into separate part sub-meshes using Hunyuan3D-Part / X-Part.
-    Input is any .glb/.obj/.ply/.stl. Output is an exploded GLB where each semantic part
-    is its own sub-mesh, spread apart for visibility. Use this as the FIRST step when
-    you want to edit a specific part of a mesh — once parts are separate sub-meshes,
-    other tools can drop, replace, or retexture them individually.
-    Returns the path to the exploded .glb file."""
-    out = _stamp("part_dec", "glb")
-    path = hunyuan3d_part_decompose(mesh_path=mesh_path, out_path=out)
-    return f"Decomposed model saved: {path}"
-
- 
- 
- 
- 
 # ── exported list ─────────────────────────────────────────────────────────────
  
 ALL_TOOLS = [
+    tool_web_search,
+    tool_image_search,
+    tool_download_image,
     tool_generate_concept_image,
     tool_restyle_to_objaverse,
     tool_trellis2,
     tool_trellis2_texture,
     tool_partcrafter,
     tool_hunyuan3d2,
-    tool_hunyuan3d2_texture,
-    tool_hunyuan3d_part_segment,
-    tool_hunyuan3d_part_decompose,
 ]
 
 
