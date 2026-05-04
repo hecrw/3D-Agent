@@ -10,7 +10,6 @@ Async submit/poll, same shape as the trellis2/partcrafter/ apps.
 Routes:
     POST /generate     image                    -> {job_id}    (shape + texture)
     POST /shape        image                    -> {job_id}    (shape only)
-    POST /texture      image + mesh             -> {job_id}    (retexture an existing mesh)
     GET  /jobs/{id}                             -> 202 / 200 GLB / 5xx
 
 Deploy:
@@ -286,100 +285,3 @@ class Generator:
 
         return api
 
-
-# ---------------------------------------------------------------------------
-# Texture-only (retexture an arbitrary mesh)
-# ---------------------------------------------------------------------------
-@app.cls(
-    gpu="L40S",
-    volumes={"/cache": hf_cache_vol, JOBS_DIR: jobs_vol},
-    secrets=[modal.Secret.from_name("huggingface-secret")],
-    scaledown_window=300,
-    timeout=3600,
-    max_containers=2,
-)
-class Texturer:
-    @modal.enter()
-    def load(self):
-        from hy3dgen.texgen import Hunyuan3DPaintPipeline
-        from hy3dgen.rembg import BackgroundRemover
-
-        self.paint = Hunyuan3DPaintPipeline.from_pretrained(PAINT_MODEL)
-        self.rembg = BackgroundRemover()
-
-    @modal.method()
-    def _do_texture(
-        self,
-        image_bytes: bytes,
-        mesh_bytes: bytes,
-        mesh_suffix: str,
-        job_id: str,
-        rembg: bool,
-    ):
-        import os, tempfile, traceback
-        import trimesh
-
-        out_path, err_path = _job_paths(job_id)
-        tmp_path = None
-        try:
-            img = _read_image(image_bytes)
-            if rembg:
-                img = self.rembg(img)
-
-            with tempfile.NamedTemporaryFile(suffix=mesh_suffix, delete=False) as tmp:
-                tmp.write(mesh_bytes)
-                tmp_path = tmp.name
-
-            mesh = trimesh.load(tmp_path, force="mesh")
-            mesh = self.paint(mesh, image=img)
-            mesh.export(out_path)
-        except Exception:
-            with open(err_path, "w") as f:
-                f.write(traceback.format_exc())
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            jobs_vol.commit()
-
-    @modal.asgi_app()
-    def web(self):
-        import os, uuid
-        from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-
-        api = FastAPI(title="Hunyuan3D-2 PBR texturing")
-
-        @api.get("/")
-        def root():
-            return {
-                "service": "hunyuan3d-2-texturer",
-                "submit": "POST /texture (multipart: image, mesh)",
-                "poll":   "GET /jobs/{job_id}",
-                "supported_mesh_formats": [".glb", ".obj", ".ply", ".stl"],
-            }
-
-        @api.post("/texture")
-        async def texture(
-            image: UploadFile = File(...),
-            mesh: UploadFile = File(...),
-            rembg: bool = Form(True),
-        ):
-            try:
-                image_bytes = await image.read()
-                _read_image(image_bytes)
-            except Exception as e:
-                raise HTTPException(400, f"could not decode image: {e}")
-
-            mesh_bytes = await mesh.read()
-            suffix = os.path.splitext(mesh.filename or "")[1].lower() or ".glb"
-
-            job_id = uuid.uuid4().hex
-            await self._do_texture.spawn.aio(
-                image_bytes, mesh_bytes, suffix, job_id, rembg,
-            )
-            return {"job_id": job_id, "poll_url": f"/jobs/{job_id}"}
-
-        @api.get("/jobs/{job_id}")
-        async def get_job(job_id: str):
-            return await _serve_job(job_id, download_name=f"{job_id}.glb")
-
-        return api

@@ -21,9 +21,6 @@ TRELLIS_TEX_URL = f"https://{WORKSPACE}--trellis2-texturer-web.modal.run"
 PARTCRAFTER_OBJ_URL = f"https://{WORKSPACE}--partcrafter-objectgenerator-web.modal.run"
 PARTCRAFTER_SCENE_URL = f"https://{WORKSPACE}--partcrafter-scenegenerator-web.modal.run"
 HUNYUAN3D2_GEN_URL = f"https://{WORKSPACE}--hunyuan3d-2-generator-web.modal.run"
-HUNYUAN3D2_TEX_URL = f"https://{WORKSPACE}--hunyuan3d-2-texturer-web.modal.run"
-HUNYUAN3D_PART_SEG_URL = f"https://{WORKSPACE}--hunyuan3d-part-segmenter-web.modal.run"
-HUNYUAN3D_PART_DEC_URL = f"https://{WORKSPACE}--hunyuan3d-part-decomposer-web.modal.run"
 
 
 OBJAVERSE_STYLE_PROMPT = (
@@ -108,6 +105,66 @@ def restyle_to_objaverse(image_path: str | Path,
     print(f"[gemini] saved {path}")
     return path
 
+
+# ---------------------------------------------------------------------------
+# Web + image search (Tavily) and image download
+# ---------------------------------------------------------------------------
+TAVILY_URL = "https://api.tavily.com/search"
+
+
+def _tavily(payload: dict) -> dict:
+    key = os.environ.get("TAVILY_API_KEY")
+    if not key:
+        raise RuntimeError("TAVILY_API_KEY not set (check your .env)")
+    r = requests.post(TAVILY_URL, json={"api_key": key, **payload}, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def web_search(query: str, max_results: int = 5) -> str:
+    """Web search via Tavily. Returns markdown-formatted results."""
+    print(f"[tavily] search: {query!r}")
+    data = _tavily({
+        "query": query,
+        "max_results": max_results,
+        "search_depth": "basic",
+    })
+    out = [f"# Results for: {query}"]
+    if answer := data.get("answer"):
+        out.append(f"\n**Quick answer:** {answer}\n")
+    for hit in data.get("results", []):
+        snippet = (hit.get("content") or "")[:300].strip()
+        out.append(f"- **{hit.get('title','')}** — {hit.get('url','')}\n  {snippet}")
+    return "\n".join(out) if len(out) > 1 else "No results."
+
+
+def image_search(query: str, max_results: int = 5) -> list[str]:
+    """Image search via Tavily. Returns list of image URLs."""
+    print(f"[tavily] image search: {query!r}")
+    data = _tavily({
+        "query": query,
+        "max_results": max_results,
+        "include_images": True,
+    })
+    return data.get("images", []) or []
+
+
+def download_image(url: str, out_path: str | Path | None = None) -> str:
+    """Download an image URL to a local file. Returns the saved path."""
+    out_path = str(out_path or f"downloaded_{int(time.time())}.jpg")
+    print(f"[download] {url}")
+    r = requests.get(
+        url, stream=True, timeout=60,
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    r.raise_for_status()
+    with open(out_path, "wb") as f:
+        for chunk in r.iter_content(8192):
+            f.write(chunk)
+    # Validate it's actually an image (Tavily occasionally returns dead links).
+    Image.open(out_path).verify()
+    print(f"[download] saved {out_path}")
+    return out_path
 
 
 def _compact_mesh_for_upload(mesh_path: str | Path,
@@ -428,64 +485,6 @@ def hunyuan3d2(image_path: str | Path,
         **job_kwargs,
     )
 
-
-def hunyuan3d2_texture(image_path: str | Path,
-                       mesh_path: str | Path,
-                       out_path: str | Path | None = None,
-                       rembg: bool = True,
-                       **job_kwargs) -> str:
-    """Hunyuan3D-2 paint: image + mesh -> retextured GLB."""
-    out_path = str(out_path or f"hunyuan3d2_textured_{int(time.time())}.glb")
-    return _run_modal_job(
-        tag="hunyuan3d2-tex",
-        submit_url=f"{HUNYUAN3D2_TEX_URL}/texture",
-        base_url=HUNYUAN3D2_TEX_URL,
-        files={"image": str(image_path), "mesh": str(mesh_path)},
-        form={"rembg": str(rembg).lower()},
-        out_path=out_path,
-        volume_name="hunyuan3d-2-jobs",
-        **job_kwargs,
-    )
-
-
-def hunyuan3d_part_segment(mesh_path: str | Path,
-                           out_path: str | Path | None = None,
-                           point_num: int = 100000,
-                           prompt_num: int = 400,
-                           **job_kwargs) -> str:
-    """Hunyuan3D-Part / P3-SAM: mesh -> labelled GLB (faces tagged by part)."""
-    out_path = str(out_path or f"hunyuan3d_part_seg_{int(time.time())}.glb")
-    return _run_modal_job(
-        tag="hunyuan3d-part-seg",
-        submit_url=f"{HUNYUAN3D_PART_SEG_URL}/segment",
-        base_url=HUNYUAN3D_PART_SEG_URL,
-        files={"mesh": _compact_mesh_for_upload(mesh_path)},
-        form={
-            "point_num": str(point_num),
-            "prompt_num": str(prompt_num),
-        },
-        out_path=out_path,
-        volume_name="hunyuan3d-part-jobs",
-        **job_kwargs,
-    )
-
-
-def hunyuan3d_part_decompose(mesh_path: str | Path,
-                             out_path: str | Path | None = None,
-                             octree_resolution: int = 512,
-                             **job_kwargs) -> str:
-    """Hunyuan3D-Part / X-Part: mesh -> exploded-parts GLB (each part as a sub-mesh)."""
-    out_path = str(out_path or f"hunyuan3d_part_dec_{int(time.time())}.glb")
-    return _run_modal_job(
-        tag="hunyuan3d-part-dec",
-        submit_url=f"{HUNYUAN3D_PART_DEC_URL}/decompose",
-        base_url=HUNYUAN3D_PART_DEC_URL,
-        files={"mesh": _compact_mesh_for_upload(mesh_path)},
-        form={"octree_resolution": str(octree_resolution)},
-        out_path=out_path,
-        volume_name="hunyuan3d-part-jobs",
-        **job_kwargs,
-    )
 
 def test():
     generate_concept_image("a cat with a hat and boots", "media/2d_outputs/cat.jpeg")
