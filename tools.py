@@ -1,16 +1,11 @@
-import argparse
-import gzip
 import io
 import os
 import random
-import tempfile
 import time
 from pathlib import Path
-from typing import Optional
-import trimesh
-import pyrender
-import numpy as np
+from typing import Optional, Literal
 from PIL import Image
+from pydantic import BaseModel
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -19,6 +14,10 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from PIL import Image
+from transformers import CLIPModel, CLIPProcessor
+import torch
+
+import trimesh
 
 load_dotenv()
 
@@ -607,7 +606,6 @@ def render_mesh_views(mesh_path: str | Path,
     # Lazy imports — keeps tools.py importable on machines without GL.
     import numpy as np
     import pyrender
-    import trimesh
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -670,7 +668,88 @@ def render_mesh_views(mesh_path: str | Path,
         renderer.delete()
     return paths
 
-def test():
-    generate_concept_image("a cat with a hat and boots", "media/2d_outputs/cat.jpeg")
-    restyle_to_objaverse("media/2d_outputs/cat.jpeg", "media/2d_outputs/restylized_cat.jpeg")
-    hunyuan3d2("media/2d_outputs/restylized_cat.jpeg", "media/3d_outputs/cat.glb")
+
+class AlignmentReport(BaseModel):
+    accept: bool
+    score: float
+    summary: str
+    next_action: Literal["proceed", "regenerate"]
+    worst_view: str | None
+    per_view: dict[str, float]
+
+
+_MODEL = None
+_PROCESSOR = None
+_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _load(model_name: str = "openai/clip-vit-large-patch14"):
+    global _MODEL, _PROCESSOR
+    if _MODEL is None:
+        _MODEL = CLIPModel.from_pretrained(model_name).to(_DEVICE).eval()
+        _PROCESSOR = CLIPProcessor.from_pretrained(model_name)
+    return _MODEL, _PROCESSOR
+
+
+@torch.no_grad()
+def check_alignment(
+    view_paths: dict[str, str] | list[str | Path],
+    prompt: str,
+    *,
+    accept_threshold: float = 0.22,
+    min_view_threshold: float = 0.15,
+) -> AlignmentReport:
+    if isinstance(view_paths, dict):
+        items = list(view_paths.items())
+    else:
+        items = [(Path(p).stem, str(p)) for p in view_paths]
+
+    if not items:
+        return AlignmentReport(
+            accept=False, score=0.0,
+            summary="No views provided.",
+            next_action="regenerate",
+            worst_view=None, per_view={},
+        )
+
+    model, processor = _load()
+    images = [Image.open(p).convert("RGB") for _, p in items]
+
+    inputs = processor(text=[prompt], images=images, return_tensors="pt", padding=True).to(_DEVICE)
+    out = model(**inputs)
+    img_emb = out.image_embeds / out.image_embeds.norm(dim=-1, keepdim=True)
+    txt_emb = out.text_embeds / out.text_embeds.norm(dim=-1, keepdim=True)
+    sims = (img_emb @ txt_emb.T).squeeze(-1).cpu().tolist()
+
+    per_view = {name: round(float(s), 3) for (name, _), s in zip(items, sims)}
+    mean = sum(per_view.values()) / len(per_view)
+    worst_name = min(per_view, key=per_view.get)
+    worst_score = per_view[worst_name]
+
+    if mean < accept_threshold or worst_score < min_view_threshold:
+        if worst_score < min_view_threshold:
+            summary = (
+                f"The '{worst_name}' view does not match the prompt "
+                f"(score {worst_score:.2f}); likely a Janus-style inconsistency."
+            )
+        else:
+            summary = f"Mesh weakly matches the prompt (mean score {mean:.2f})."
+        return AlignmentReport(
+            accept=False,
+            score=round(mean, 2),
+            summary=summary,
+            next_action="regenerate",
+            worst_view=worst_name,
+            per_view=per_view,
+        )
+
+    return AlignmentReport(
+        accept=True,
+        score=round(mean, 2),
+        summary=f"Mesh matches the prompt across all views (mean {mean:.2f}).",
+        next_action="proceed",
+        worst_view=worst_name,
+        per_view=per_view,
+    )
+paths = render_mesh_views("media/3d_outputs/hunyuan_1777909051.glb", "views")
+print(check_alignment(paths, "fox"))
