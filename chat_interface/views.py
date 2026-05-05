@@ -10,12 +10,32 @@ import modal
 
 # --- HELPER: CLEAN THE BOT OUTPUT ---
 def scrub_bot_text(raw_text):
-    clean_text = re.sub(r'\[.*?\]\(.*?\)', '', raw_text) 
-    clean_text = re.sub(r'[^\s]*3d_outputs[^\s]*', '', clean_text)
+    # 1. Try to handle JSON-like structures from the model
+    try:
+        # Some models might return valid JSON
+        if raw_text.strip().startswith('{') and raw_text.strip().endswith('}'):
+            data = json.loads(raw_text)
+            if isinstance(data, dict):
+                if "content" in data: raw_text = data["content"]
+                elif "text" in data: raw_text = data["text"]
+                elif "action" in data and isinstance(data["action"], str) and len(data) == 1:
+                    pass # Just the action, keep it
+    except:
+        # If not valid JSON, try a regex to pull text out of a "content": "..." pattern
+        json_text_match = re.search(r'"(?:content|text)"\s*:\s*"(.+?)"', raw_text, re.DOTALL)
+        if json_text_match:
+            raw_text = json_text_match.group(1).encode().decode('unicode_escape')
+
+    # 2. Clean up paths and internal info
+    # We NO LONGER remove markdown links [text](url)
+    clean_text = re.sub(r'[^\s]*3d_outputs[^\s]*', '', raw_text)
     clean_text = re.sub(r'[^.!?\n]*(?:/Users/|/home/|/var/|/media/|[a-zA-Z]:\\)[^.!?\n]*[.!?]?', '', clean_text)
+    
+    # 3. Final polish
     clean_text = clean_text.strip()
     clean_text = re.sub(r'\n\s*\n', '\n\n', clean_text)
-    return clean_text if clean_text else "I've generated the 3D model for you."
+    
+    return clean_text if clean_text else "I've generated the results for you."
 
 # --- VIEWS ---
 
@@ -71,7 +91,7 @@ def new_chat(request):
             text=initial_prompt
         )
     
-    return redirect("chat_detail", session_id=session.id)
+    return redirect(f"/chat/{session.id}/?auto_start=true")
 
 
 def delete_chat(request, session_id):
@@ -121,15 +141,22 @@ def api_send_message(request, session_id):
             
             elif event["type"] == "text":
                 raw_text = event["content"]   # plain string now
-                print(raw_text)
+                print(f"RAW BOT TEXT: {raw_text}")
 
                 bot_3d_path = ""
+                # Check for local outputs first
                 file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png))', raw_text)
                 if file_match:
-                    bot_3d_path = f"/media/3d_outputs/{file_match.group(1)}"
+                    filename = file_match.group(1).lstrip('/\\')
+                    bot_3d_path = f"/media/3d_outputs/{filename}"
+                else:
+                    # Check for external URLs if no local output found (e.g. from image search)
+                    url_match = re.search(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', raw_text, re.IGNORECASE)
+                    if url_match:
+                        bot_3d_path = url_match.group(1)
 
                 bot_text = scrub_bot_text(raw_text)
-                if bot_3d_path and "preview window" not in bot_text:
+                if bot_3d_path and "3d_outputs" in raw_text and "preview window" not in bot_text:
                     bot_text += "\n\nYou can view it in the chat."
 
                 ChatMessage.objects.create(
