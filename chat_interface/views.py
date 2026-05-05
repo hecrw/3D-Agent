@@ -1,10 +1,12 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import ChatSession, ChatMessage
 import json
 import re
-from agent import process_chat, generate_chat_title
+from agent import process_chat, generate_chat_title, process_chat_stream
+# NEW: Import Modal to handle cancellation
+import modal
 
 # --- HELPER: CLEAN THE BOT OUTPUT ---
 def scrub_bot_text(raw_text):
@@ -71,7 +73,23 @@ def new_chat(request):
     
     return redirect("chat_detail", session_id=session.id)
 
-from django.http import StreamingHttpResponse
+
+def delete_chat(request, session_id):
+    chat = get_object_or_404(ChatSession, id=session_id)
+    chat.delete()
+    # Always redirect to index (landing page) after deletion
+    return redirect('index')
+
+
+def rename_chat(request, session_id):
+    if request.method == "POST":
+        chat = get_object_or_404(ChatSession, id=session_id)
+        new_title = request.POST.get('new_title', 'Unnamed Chat')
+        chat.title = new_title
+        chat.save()
+    return redirect('chat_detail', session_id=session_id)
+
+
 
 def api_send_message(request, session_id):
     """This is what the JavaScript calls to get the AI's 3D response."""
@@ -80,29 +98,29 @@ def api_send_message(request, session_id):
         user_text = data.get('text')
         active_session = get_object_or_404(ChatSession, id=session_id)
 
-        # Ensure user message is saved
         last_msg = active_session.messages.all().order_by('created_at').last()
         if not (last_msg and last_msg.sender == "user" and last_msg.text == user_text):
             ChatMessage.objects.create(session=active_session, sender="user", text=user_text)
 
-        # Build history for the agent
         db_messages = active_session.messages.all().order_by('created_at')
         history = [{"role": msg.sender, "content": msg.text} for msg in db_messages]
 
-        # Auto-title if this is the first real message in a generic chat
         if active_session.title == "New Chat" or active_session.title == user_text[:30]:
              active_session.title = generate_chat_title(user_text)
              active_session.save()
-
-        from agent import process_chat_stream
 
         def event_stream():
             bot_text = ""
             bot_3d_path = ""
             
             for event in process_chat_stream(user_text, history):
-                if event["type"] == "status":
+                # NEW: Catch the call_id from the agent and pass it to frontend
+                if event.get("type") == "call_id":
+                    yield f"data: {json.dumps({'type': 'call_id', 'modal_call_id': event['content']})}\n\n"
+                
+                elif event["type"] == "status":
                     yield f"data: {json.dumps(event)}\n\n"
+                
                 elif event["type"] == "text":
                     
                     raw_text = event["content"][0]['text']
@@ -111,12 +129,10 @@ def api_send_message(request, session_id):
                     if file_match:
                         bot_3d_path = f"/media/3d_outputs/{file_match.group(1)}"
 
-                    # Clean and supplement bot text
                     bot_text = scrub_bot_text(raw_text)
                     if bot_3d_path and "preview window" not in bot_text:
                         bot_text += "\n\nYou can view it in the chat."
 
-                    # Save Assistant message to DB
                     ChatMessage.objects.create(
                         session=active_session, 
                         sender="assistant", 
@@ -135,20 +151,28 @@ def api_send_message(request, session_id):
 
     return JsonResponse({"error": "Invalid method"}, status=400)
 
-def delete_chat(request, session_id):
-    chat = get_object_or_404(ChatSession, id=session_id)
-    chat.delete()
-    # Always redirect to index (landing page) after deletion
-    return redirect('index')
-
-
-def rename_chat(request, session_id):
+# NEW VIEW: To stop the Modal container
+def api_stop_chat(request):
+    """Kills the running Modal container using the call_id."""
     if request.method == "POST":
-        chat = get_object_or_404(ChatSession, id=session_id)
-        new_title = request.POST.get('new_title', 'Unnamed Chat')
-        chat.title = new_title
-        chat.save()
-    return redirect('chat_detail', session_id=session_id)
+        # Check if it's form-encoded (from my previous JS update) or JSON
+        call_id = request.POST.get('call_id')
+        if not call_id:
+            try:
+                data = json.loads(request.body)
+                call_id = data.get('call_id')
+            except: pass
+
+        if call_id:
+            try:
+                # Interact with Modal API to terminate the specific function call
+                f_call = modal.functions.FunctionCall.from_id(call_id)
+                f_call.cancel()
+                return JsonResponse({"status": "stopped", "call_id": call_id})
+            except Exception as e:
+                return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    
+    return JsonResponse({"error": "No call_id provided"}, status=400)
 
 
 @csrf_exempt # Or ensure CSRF is handled in fetch
