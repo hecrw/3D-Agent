@@ -1,24 +1,6 @@
-"""
-Free local LangChain agent — compatible with langchain >= 1.0
-Uses LangGraph's prebuilt ReAct agent + Ollama (no API key needed).
-
-Setup:
-    1. Install Ollama:      https://ollama.com/download
-    2. Pull a model:        ollama pull llama3.2
-    3. Install deps:
-       pip install -U langchain langchain-ollama langgraph
-
-Usage:
-    python free_langchain_agent.py
-"""
 import time
 from pathlib import Path
 from langchain_core.tools import tool
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
 
 from tools import (
     generate_concept_image,
@@ -31,6 +13,7 @@ from tools import (
     image_search,
     download_image,
     render_mesh_views,
+    check_alignment,
 )
  
 import os
@@ -128,13 +111,34 @@ def tool_hunyuan3d2(image_path: str) -> str:
 
 @tool
 def tool_render_mesh_views(mesh_path: str) -> str:
-    """Render 6 axis-aligned views of a 3D mesh as PNGs."""
+    """Render 6 axis-aligned views (front/back/left/right/top/bottom) of a 3D mesh
+    as PNGs. Use to inspect what a generated GLB looks like, or to produce a
+    reference image you can feed back into another pipeline or a VLM.
+    Accepts .glb/.obj/.ply/.stl. Returns the directory containing the PNGs
+    plus the per-view paths."""
     out_dir = OUT / f"views_{int(time.time())}"
     paths = render_mesh_views(mesh_path=mesh_path, out_dir=out_dir)
-    lines = [f"Rendered views to {out_dir}:"]
+    lines = [f"Rendered {len(paths)} views to {out_dir}:"]
     lines += [f"- {name}: {p}" for name, p in paths.items()]
     return "\n".join(lines)
 
+@tool
+def tool_score_alignment(mesh_path: str, prompt: str) -> str:
+    """Score how well a generated mesh matches the text prompt by rendering
+    multi-view images and comparing each view to the prompt with CLIP.
+    Use this after topology passes, to decide whether to keep or regenerate
+    the candidate. Flags the worst view by name so you can target a regeneration
+    or texture pass at the failing angle.
+    Returns a one-line verdict including a recommended next action:
+    'proceed' or 'regenerate'."""
+    out_dir = _stamp("views", "")
+    paths = render_mesh_views(mesh_path, out_dir, views="default")
+    r = check_alignment(paths, prompt)
+    worst = f" | worst_view: {r.worst_view}" if not r.accept and r.worst_view else ""
+    return (
+        f"Alignment score: {r.score:.2f} | accept: {r.accept} | "
+        f"next_action: {r.next_action}{worst} | {r.summary}"
+    )
 
  
 ALL_TOOLS = [
@@ -147,7 +151,7 @@ ALL_TOOLS = [
     tool_trellis2_texture,
     tool_partcrafter,
     tool_hunyuan3d2,
-    tool_render_mesh_views,
+    tool_score_alignment,
 ]
 
 
