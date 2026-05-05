@@ -20,7 +20,7 @@ class ChatMessage(models.Model):
     # NEW: Stores the Modal function call ID (e.g., fc-xxxxxx) 
     # to allow the Stop button to cancel the specific GPU task.
     modal_call_id = models.CharField(max_length=255, blank=True, null=True)
-    
+    attachment = models.ImageField(upload_to='chat_attachments/', blank=True, null=True)
     created_at = models.DateTimeField(default=now)
 
     class Meta:

@@ -88,7 +88,8 @@ def new_chat(request):
         ChatMessage.objects.create(
             session=session,
             sender="user",
-            text=initial_prompt
+            text=initial_prompt,
+            attachment=request.FILES.get('attachment')
         )
     
     return redirect(f"/chat/{session.id}/?auto_start=true")
@@ -118,21 +119,59 @@ def api_send_message(request, session_id):
     
     data = json.loads(request.body)
     user_text = data.get('text')
+    user_image_b64 = data.get('image') # base64 string
     active_session = get_object_or_404(ChatSession, id=session_id)
 
     last_msg = active_session.messages.all().order_by('created_at').last()
+    current_user_msg = None
     if not (last_msg and last_msg.sender == "user" and last_msg.text == user_text):
-        ChatMessage.objects.create(session=active_session, sender="user", text=user_text)
+        import base64
+        from django.core.files.base import ContentFile
+        
+        attachment = None
+        if user_image_b64 and "," in user_image_b64:
+            format, imgstr = user_image_b64.split(';base64,')
+            ext = format.split('/')[-1]
+            attachment = ContentFile(base64.b64decode(imgstr), name=f"upload.{ext}")
+            
+        current_user_msg = ChatMessage.objects.create(
+            session=active_session, 
+            sender="user", 
+            text=user_text,
+            attachment=attachment
+        )
 
+    # Fetch history EXCLUDING the message we are currently processing (the last one)
     db_messages = active_session.messages.all().order_by('created_at')
-    history = [{"role": msg.sender, "content": msg.text} for msg in db_messages]
+    # If the last message is the one we just processed/identified, remove it from history
+    # to avoid the AI seeing the same prompt twice.
+    history_messages = db_messages[:db_messages.count()-1] if db_messages.count() > 0 else []
+    
+    history = []
+    for msg in history_messages:
+        content = msg.text
+        if msg.attachment:
+            content += f"\n\n[Uploaded Image Local Path: {msg.attachment.path}]"
+        
+        item = {"role": msg.sender, "content": content}
+        if msg.attachment:
+            # Provide absolute URL for the agent (LangChain/Gemini)
+            item["image"] = request.build_absolute_uri(msg.attachment.url)
+        history.append(item)
+
+    # The current image for the agent (if just sent)
+    current_image_url = None
+    if current_user_msg and current_user_msg.attachment:
+        current_image_url = request.build_absolute_uri(current_user_msg.attachment.url)
+        # We append the local path to the prompt so the agent knows what path to pass to tools
+        user_text += f"\n\n[Uploaded Image Local Path: {current_user_msg.attachment.path}]"
 
     if active_session.title == "New Chat" or active_session.title == user_text[:30]:
         active_session.title = generate_chat_title(user_text)
         active_session.save()
 
     def event_stream():
-        for event in process_chat_stream(user_text, history):
+        for event in process_chat_stream(user_text, history, user_image_url=current_image_url):
             if event["type"] == "call_id":
                 yield f"data: {json.dumps({'type': 'call_id', 'modal_call_id': event['content']})}\n\n"
             
