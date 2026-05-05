@@ -751,5 +751,3 @@ def check_alignment(
         worst_view=worst_name,
         per_view=per_view,
     )
-paths = render_mesh_views("media/3d_outputs/hunyuan_1777909051.glb", "views")
-print(check_alignment(paths, "fox"))

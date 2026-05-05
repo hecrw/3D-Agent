@@ -14,6 +14,22 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+"""
+URL configuration for core project.
+
+The `urlpatterns` list routes URLs to views. For more information please see:
+    https://docs.djangoproject.com/en/5.2/topics/http/urls/
+Examples:
+Function views
+    1. Add an import:  from my_app import views
+    2. Add a URL to urlpatterns:  path('', views.home, name='home')
+Class-based views
+    1. Add an import:  from other_app.views import Home
+    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
+Including another URLconf
+    1. Import the include() function: from django.urls import include, path
+    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+"""
 from django.contrib import admin
 from django.urls import path
 from chat_interface import views
@@ -29,6 +45,9 @@ urlpatterns = [
     path('chat/<int:session_id>/delete/', views.delete_chat, name='delete_chat'),
     path('chat/<int:session_id>/rename/', views.rename_chat, name='rename_chat'),
     path('api/chat/<int:session_id>/message/', views.api_send_message, name='api_send_message'),
+    
+    # NEW: Endpoint to stop/cancel the Modal function call
+    path('api/chat/stop/', views.api_stop_chat, name='api_stop_chat'),
     
     path('gallery/', views.gallery, name='gallery'),
     path('api/gallery/delete/', views.api_delete_assets, name='api_delete_assets'),
