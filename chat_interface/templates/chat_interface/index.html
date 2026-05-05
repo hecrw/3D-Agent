@@ -202,14 +202,17 @@
 
         let isGenerating = false;
         let abortController = null;
+        let currentModalCallId = null; // Store the ID of the running Modal job
 
         function toggleGenerating(state) {
             isGenerating = state;
             if (state) {
+                // Square stop button icon
                 sendBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="text-indigo-500"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
                 userInput.disabled = true;
                 userInput.placeholder = "Generation in progress...";
             } else {
+                // Send arrow icon
                 sendBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`;
                 userInput.disabled = false;
                 userInput.placeholder = "Describe the 3D model you want to create...";
@@ -268,6 +271,7 @@
         async function fetchAiResponse(text, loadingId) {
             abortController = new AbortController();
             toggleGenerating(true);
+            currentModalCallId = null; // Reset for new call
 
             try {
                 const response = await fetch(`/api/chat/${activeSessionId}/message/`, {
@@ -292,6 +296,12 @@
                         if (line.startsWith('data: ')) {
                             try {
                                 const data = JSON.parse(line.substring(6));
+                                
+                                // Capture the Modal Call ID if sent in the stream
+                                if (data.modal_call_id) {
+                                    currentModalCallId = data.modal_call_id;
+                                }
+
                                 if (data.type === 'status' && statusEl) {
                                     statusEl.innerText = data.content;
                                 } else if (data.type === 'final') {
@@ -305,6 +315,16 @@
                 }
             } catch (error) {
                 if (error.name === 'AbortError') {
+                    // USER CLICKED STOP: Send the cancel request to Modal via Django
+                    if (currentModalCallId) {
+                        console.log("Cancelling Modal Job:", currentModalCallId);
+                        fetch(`/api/chat/stop/`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+                            body: `call_id=${currentModalCallId}`
+                        });
+                    }
+
                     const loadingEl = document.getElementById(loadingId);
                     if (loadingEl) {
                         loadingEl.innerHTML = `<div class="p-3 bg-[#1e1e23] border border-[#232326] rounded-xl text-[#555] text-xs italic">Generation stopped by user.</div>`;
@@ -318,12 +338,15 @@
             } finally {
                 toggleGenerating(false);
                 abortController = null;
+                currentModalCallId = null;
             }
         }
 
         async function handleSend() {
             if (isGenerating) {
-                if (abortController) abortController.abort();
+                if (abortController) {
+                    abortController.abort(); // This triggers the 'AbortError' in fetchAiResponse
+                }
                 return;
             }
 

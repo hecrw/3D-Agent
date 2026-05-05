@@ -16,6 +16,11 @@ class ChatMessage(models.Model):
     sender = models.CharField(max_length=50) # 'user' or 'assistant'
     text = models.TextField()
     object_path = models.URLField(blank=True, null=True) # For the 3D GLB file
+    
+    # NEW: Stores the Modal function call ID (e.g., fc-xxxxxx) 
+    # to allow the Stop button to cancel the specific GPU task.
+    modal_call_id = models.CharField(max_length=255, blank=True, null=True)
+    
     created_at = models.DateTimeField(default=now)
 
     class Meta:
