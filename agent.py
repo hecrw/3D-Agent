@@ -168,8 +168,12 @@ agent = create_agent(
     model=llm,
     tools=ALL_TOOLS,
     system_prompt="""You are a helpful assistant.
-    make conversation with the user, ut if his request can be 
-    done using the tools you have use the tools to fullfill his request""",
+    If the user provides an image, you will see an [Uploaded Image Local Path: ...] in the message.
+    CRITICAL: Never use 'input_file_0.png' or any other generated path. 
+    Use the EXACT absolute path provided in the [Uploaded Image Local Path: ...] tag for any tool that requires an 'image_path'.
+    If you see an image but no local path is provided in the text, ask the user for clarification.
+    Make conversation with the user, but if his request can be 
+    done using the tools you have, use the tools to fulfill his request.""",
 )
 
 
@@ -181,7 +185,7 @@ def generate_chat_title(user_prompt):
     except:
         return user_prompt[:30]
 
-def process_chat_stream(user_input, chat_history_list):
+def process_chat_stream(user_input, chat_history_list, user_image_url=None):
     """
     Generator that yields dictionaries:
       {"type": "call_id", "content": "fc-..."}
@@ -191,8 +195,27 @@ def process_chat_stream(user_input, chat_history_list):
     messages = []
     for msg in chat_history_list:
         role = "user" if msg["role"] == "user" else "assistant"
-        messages.append({"role": role, "content": msg["content"]})
-    messages.append({"role": "user", "content": user_input})
+        content = msg["content"]
+        # If there's an image in history, we should ideally handle it too
+        # but for now let's focus on the current message.
+        if msg.get("image"):
+            content = [
+                {"type": "text", "text": content},
+                {"type": "image_url", "image_url": msg["image"]}
+            ]
+        messages.append({"role": role, "content": content})
+    
+    # Current message
+    if user_image_url:
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": user_input},
+                {"type": "image_url", "image_url": user_image_url}
+            ]
+        })
+    else:
+        messages.append({"role": "user", "content": user_input})
     
     try:
         f = io.StringIO()

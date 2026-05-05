@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Agent | AI-Powered Generation</title>
+    <title>CatGen | AI-Powered 3D Generation</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -108,7 +108,7 @@
 
         /* Chat Container */
         #chat-container { flex: 1; overflow-y: auto; padding: 24px 0 140px; scroll-behavior: smooth; }
-        .message-box { max-width: 800px; margin: 0 auto 24px; padding: 0 24px; width: 100%; animation: fadeIn 0.4s ease-out; }
+        .message-box { max-width: 600px; margin: 0 auto 24px; padding: 0 24px; width: 100%; animation: fadeIn 0.4s ease-out; }
         
         .user-msg { display: flex; justify-content: flex-end; }
         .user-content { background: var(--msg-user); padding: 12px 20px; border-radius: 20px; max-width: 85%; font-size: 15px; line-height: 1.5; color: var(--text-main); }
@@ -126,10 +126,30 @@
 
         /* Input Area */
         .input-bar-outer { position: absolute; bottom: 0; left: 0; right: 0; padding: 24px; background: linear-gradient(transparent, var(--bg) 50%); display: flex; justify-content: center; z-index: 35; }
-        .input-bar-inner { max-width: 800px; width: 100%; background: var(--card-bg); border: 1px solid var(--border); border-radius: 24px; padding: 6px 6px 6px 20px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); transition: all 0.3s; }
+        .input-bar-inner { max-width: 600px; width: 100%; background: var(--card-bg); border: 1px solid var(--border); border-radius: 24px; padding: 6px 6px 6px 12px; display: flex; flex-direction: column; gap: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.03); transition: all 0.3s; position: relative; }
         .input-bar-inner:focus-within { border-color: var(--accent); box-shadow: 0 8px 32px rgba(217, 119, 87, 0.1); }
         
-        .hero-bar-container { max-width: 800px; width: 100%; display: flex; justify-content: center; position: relative; }
+        .input-row { display: flex; align-items: center; gap: 12px; width: 100%; }
+        
+        /* Image Preview Area */
+        #image-preview-container { display: none; padding: 12px 12px 4px; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 8px; width: 100%; }
+        .preview-item { position: relative; width: 80px; height: 80px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+        .preview-item img { width: 100%; height: 100%; object-fit: cover; }
+        .remove-preview { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.5); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; border: none; }
+        .remove-preview:hover { background: #ef4444; }
+
+        /* Upload Menu */
+        .upload-menu { position: absolute; bottom: calc(100% + 12px); left: 12px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: none; flex-direction: column; min-width: 160px; z-index: 50; }
+        .upload-menu-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 10px; cursor: pointer; transition: all 0.2s; font-size: 14px; font-weight: 500; color: var(--text-main); }
+        .upload-menu-item:hover { background: rgba(0,0,0,0.03); }
+        body.dark-mode .upload-menu-item:hover { background: rgba(255,255,255,0.03); }
+        .upload-menu-item svg { color: var(--text-muted); }
+
+        .add-action { width: 40px; height: 40px; border-radius: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: var(--text-muted); border: none; background: transparent; flex-shrink: 0; }
+        .add-action:hover { background: rgba(0,0,0,0.05); color: var(--text-main); }
+        body.dark-mode .add-action:hover { background: rgba(255,255,255,0.05); }
+        
+        .hero-bar-container { max-width: 600px; width: 100%; display: flex; justify-content: center; position: relative; }
         .hero-input { flex: 1; border: none; outline: none; background: transparent !important; color: var(--text-main); font-family: inherit; font-size: 17px; padding: 10px 0; }
         .hero-input::placeholder { color: var(--text-muted); opacity: 0.6; }
 
@@ -166,10 +186,12 @@
     <!-- SIDEBAR -->
     <aside id="sidebar">
         <div class="sidebar-header">
-            <div class="logo-group">
-                <div class="logo-icon">3D</div>
-                <span class="logo-text">3D Agent</span>
-            </div>
+            <a href="{% url 'index' %}" class="logo-group" style="text-decoration: none; cursor: pointer;">
+                <div class="logo-icon" style="background: transparent; color: var(--accent); display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="16" r="4"/><circle cx="7" cy="10" r="2.2"/><circle cx="10" cy="7" r="2.2"/><circle cx="14" cy="7" r="2.2"/><circle cx="17" cy="10" r="2.2"/></svg>
+                </div>
+                <span class="logo-text">CatGen</span>
+            </a>
         </div>
 
         <nav class="sidebar-nav">
@@ -228,9 +250,16 @@
             <div class="message-box">
                 {% if msg.sender == 'user' %}
                     <div class="user-msg">
-                        <div class="user-content markdown-content">{{ msg.text }}</div>
+                        <div class="user-content markdown-content">
+                            {% if msg.attachment %}
+                                <div style="margin-bottom: 12px; max-width: 240px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+                                    <img src="{{ msg.attachment.url }}" style="width: 100%; height: auto; display: block;">
+                                </div>
+                            {% endif %}
+                            {{ msg.text }}
+                        </div>
                     </div>
-                {% else %}
+{% else %}
                     <div class="ai-msg">
                         <div class="ai-header">
                             <div class="ai-icon">AI</div>
@@ -263,13 +292,31 @@
             <h1 class="hero-title">Imagine in 3D.</h1>
             <p class="hero-desc">The most advanced AI engine for generating high-fidelity 3D assets from simple text descriptions.</p>
             
-            <form action="{% url 'new_chat' %}" method="POST" class="hero-bar-container">
+            <form action="{% url 'new_chat' %}" method="POST" enctype="multipart/form-data" class="hero-bar-container">
                 {% csrf_token %}
-                <div class="input-bar-inner" style="width: 100%; padding-right: 6px;">
-                    <input type="text" name="initial_prompt" class="hero-input" placeholder="A futuristic cyberpunk drone..." required autocomplete="off" autofocus>
-                    <button type="submit" class="send-action" style="width: 52px; height: 52px; border-radius: 22px;">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    </button>
+                <div class="input-bar-inner">
+                    <!-- Image Preview -->
+                    <div id="hero-image-preview" style="display: none; padding: 12px 12px 4px; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 8px; width: 100%;"></div>
+                    
+                    <div class="input-row">
+                        <button type="button" id="hero-add-btn" class="add-action">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
+                        
+                        <div id="hero-upload-menu" class="upload-menu">
+                            <div class="upload-menu-item" onclick="document.getElementById('hero-image-upload').click()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                <span>Upload Image</span>
+                            </div>
+                        </div>
+                        
+                        <input type="file" name="attachment" id="hero-image-upload" accept="image/*" style="display: none;">
+                        
+                        <input type="text" name="initial_prompt" class="hero-input" placeholder="A futuristic cyberpunk drone..." required autocomplete="off" autofocus>
+                        <button type="submit" class="send-action">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -278,10 +325,31 @@
         {% if active_session %}
         <div class="input-bar-outer">
             <div class="input-bar-inner">
-                <input type="text" id="user-input" placeholder="What should we create next?" autocomplete="off">
-                <button id="send-btn" class="send-action">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-                </button>
+                <!-- Image Preview -->
+                <div id="image-preview-container"></div>
+                
+                <div class="input-row">
+                    <button id="add-btn" class="add-action">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                    
+                    <div id="upload-menu" class="upload-menu">
+                        <div class="upload-menu-item" onclick="document.getElementById('image-upload').click()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                            <span>Upload Image</span>
+                        </div>
+                    </div>
+                    
+                    <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                    
+                    <input type="text" id="user-input" placeholder="What should we create next?" autocomplete="off">
+                    <button id="send-btn" class="send-action">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                    </button>
+                    <button id="stop-btn" class="send-action" style="display: none; background: #ef4444; border-radius: 12px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                    </button>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -397,32 +465,118 @@
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const addBtn = document.getElementById('add-btn');
+        const uploadMenu = document.getElementById('upload-menu');
+        const fileInput = document.getElementById('image-upload');
+        const previewContainer = document.getElementById('image-preview-container');
+        
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const activeSessionId = "{% if active_session %}{{ active_session.id }}{% endif %}";
 
         let isGenerating = false;
         let abortController = null;
+        let pendingImageB64 = null;
+        let currentModalCallId = null;
 
         function toggleGenerating(state) {
             isGenerating = state;
+            if (!sendBtn || !userInput || !stopBtn) return;
             if (state) {
-                sendBtn.innerHTML = `<div class="spinner"></div>`;
-                sendBtn.disabled = true;
-                userInput.placeholder = "Generating...";
+                sendBtn.style.display = 'none';
+                stopBtn.style.display = 'flex';
+                userInput.placeholder = "Assistant is working...";
             } else {
-                sendBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
-                sendBtn.disabled = false;
+                sendBtn.style.display = 'flex';
+                stopBtn.style.display = 'none';
                 userInput.placeholder = "What should we create next?";
                 userInput.focus();
+                currentModalCallId = null;
             }
         }
 
-        function appendMessage(sender, text, objectPath = null) {
+        const heroAddBtn = document.getElementById('hero-add-btn');
+        const heroUploadMenu = document.getElementById('hero-upload-menu');
+        const heroFileInput = document.getElementById('hero-image-upload');
+        const heroPreviewContainer = document.getElementById('hero-image-preview');
+
+        if (heroAddBtn) {
+            heroAddBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                heroUploadMenu.style.display = heroUploadMenu.style.display === 'flex' ? 'none' : 'flex';
+            });
+            document.addEventListener('click', () => { if (heroUploadMenu) heroUploadMenu.style.display = 'none'; });
+        }
+
+        if (heroFileInput) {
+            heroFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        heroPreviewContainer.innerHTML = `
+                            <div class="preview-item">
+                                <img src="${event.target.result}">
+                                <button type="button" class="remove-preview" onclick="clearHeroPreview()">&times;</button>
+                            </div>
+                        `;
+                        heroPreviewContainer.style.display = 'flex';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        function clearHeroPreview() {
+            heroPreviewContainer.innerHTML = '';
+            heroPreviewContainer.style.display = 'none';
+            heroFileInput.value = '';
+        }
+
+        // Toggle Upload Menu
+        if (addBtn) {
+            addBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                uploadMenu.style.display = uploadMenu.style.display === 'flex' ? 'none' : 'flex';
+            });
+            document.addEventListener('click', () => { if (uploadMenu) uploadMenu.style.display = 'none'; });
+        }
+
+        // Handle File Selection
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        pendingImageB64 = event.target.result;
+                        previewContainer.innerHTML = `
+                            <div class="preview-item">
+                                <img src="${pendingImageB64}">
+                                <button class="remove-preview" onclick="clearPreview()">&times;</button>
+                            </div>
+                        `;
+                        previewContainer.style.display = 'flex';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        function clearPreview() {
+            pendingImageB64 = null;
+            previewContainer.innerHTML = '';
+            previewContainer.style.display = 'none';
+            fileInput.value = '';
+        }
+
+        function appendMessage(sender, text, objectPath = null, imageUrl = null) {
             if (!chatContainer) return;
             const box = document.createElement('div');
             box.className = 'message-box';
             if (sender === 'user') {
-                box.innerHTML = `<div class="user-msg"><div class="user-content markdown-content">${text}</div></div>`;
+                let imgHtml = imageUrl ? `<div style="margin-bottom: 12px; max-width: 240px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);"><img src="${imageUrl}" style="width: 100%; height: auto; display: block;"></div>` : '';
+                box.innerHTML = `<div class="user-msg"><div class="user-content markdown-content">${imgHtml}${text}</div></div>`;
             } else {
                 let assetHtml = '';
                 if (objectPath) {
@@ -435,13 +589,13 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        async function fetchAiResponse(text, loadingId) {
+        async function fetchAiResponse(text, loadingId, imageData = null) {
             abortController = new AbortController(); toggleGenerating(true);
             try {
                 const response = await fetch(`/api/chat/${activeSessionId}/message/`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                    body: JSON.stringify({ text: text }),
+                    body: JSON.stringify({ text: text, image: imageData }),
                     signal: abortController.signal
                 });
                 const reader = response.body.getReader(); const decoder = new TextDecoder();
@@ -454,8 +608,15 @@
                         if (line.startsWith('data: ')) {
                             try {
                                 const data = JSON.parse(line.substring(6));
-                                if (data.type === 'status' && statusText) statusText.innerText = data.content;
-                                else if (data.type === 'final') { if (loadingEl) loadingEl.remove(); appendMessage('assistant', data.text, data["3d_object_path"]); }
+                                if (data.type === 'call_id') {
+                                    currentModalCallId = data.modal_call_id;
+                                    console.log("Captured Call ID:", currentModalCallId);
+                                } else if (data.type === 'status' && statusText) {
+                                    statusText.innerText = data.content;
+                                } else if (data.type === 'final') {
+                                    if (loadingEl) loadingEl.remove();
+                                    appendMessage('assistant', data.text, data["3d_object_path"]);
+                                }
                             } catch (e) {}
                         }
                     }
@@ -465,16 +626,51 @@
 
         async function handleSend() {
             if (isGenerating) return; const text = userInput.value.trim(); if (!text || !activeSessionId) return;
-            appendMessage('user', text); userInput.value = '';
+            const imageData = pendingImageB64;
+            appendMessage('user', text, null, imageData);
+            userInput.value = '';
+            clearPreview();
+            
             const loadingId = 'loading-' + Date.now();
             const loadingBox = document.createElement('div'); loadingBox.id = loadingId; loadingBox.className = 'message-box ai-msg';
-            loadingBox.innerHTML = `<div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Thinking</div></div><div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; margin-top: 8px;"><div class="spinner"></div> <span class="status-text">Processing...</span></div>`;
+            loadingBox.innerHTML = `<div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Assistant</div></div><div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; margin-top: 8px;"><div class="spinner"></div> <span class="status-text">Processing...</span></div>`;
             chatContainer.appendChild(loadingBox); chatContainer.scrollTop = chatContainer.scrollHeight;
-            await fetchAiResponse(text, loadingId);
+            await fetchAiResponse(text, loadingId, imageData);
+        }
+
+        async function handleStop() {
+            if (!isGenerating) return;
+            
+            // 1. Abort the frontend stream
+            if (abortController) abortController.abort();
+            
+            // 2. Terminate the backend GPU task if we have a call_id
+            if (currentModalCallId) {
+                console.log("Stopping Modal task:", currentModalCallId);
+                fetch('/api/chat/stop/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ call_id: currentModalCallId })
+                }).catch(e => console.error("Error stopping task:", e));
+            }
+            
+            // 3. UI cleanup
+            const loadingBoxes = document.querySelectorAll('.ai-msg .spinner');
+            loadingBoxes.forEach(s => {
+                const box = s.closest('.ai-msg');
+                if (box) {
+                    const status = box.querySelector('.status-text');
+                    if (status) status.innerText = "Stopped by user.";
+                    s.remove();
+                }
+            });
+            
+            toggleGenerating(false);
         }
 
         if (sendBtn && userInput) {
             sendBtn.addEventListener('click', handleSend);
+            if (stopBtn) stopBtn.addEventListener('click', handleStop);
             userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSend(); });
         }
 
@@ -493,7 +689,7 @@
                     loadingBox.id = loadingId;
                     loadingBox.className = 'message-box ai-msg';
                     loadingBox.innerHTML = `
-                        <div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Thinking</div></div>
+                        <div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Assistant</div></div>
                         <div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; margin-top: 8px;">
                             <div class="spinner"></div> <span class="status-text">Processing...</span>
                         </div>
