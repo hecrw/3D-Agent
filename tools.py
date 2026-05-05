@@ -32,9 +32,11 @@ HUNYUAN3D2_GEN_URL = f"https://{WORKSPACE}--hunyuan3d-2-generator-web.modal.run"
 OBJAVERSE_STYLE_PROMPT = (
     "Restyle this image as a single 3D asset rendered in the style of the "
     "Objaverse dataset: one centered object on a plain neutral background, "
+    "the object should be closed up almost filling the frame"
     "even studio lighting, no shadows on the ground, no scene context, no "
-    "text, clean matte materials, orthographic-feeling three-quarter view, "
-    "the object fully visible and uncropped."
+    "text, two-quarter view, "
+    "don't tilt the view of the object show it strictly from the horizaontal view"
+    "make the parts of the object distinctly visible even if you had to twist the object a little bit from the natural"
 )
 
 GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
@@ -751,5 +753,3 @@ def check_alignment(
         worst_view=worst_name,
         per_view=per_view,
     )
-paths = render_mesh_views("media/3d_outputs/hunyuan_1777909051.glb", "views")
-print(check_alignment(paths, "fox"))

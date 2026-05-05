@@ -97,7 +97,7 @@ def tool_trellis2_texture(image_path: str, mesh_path: str) -> str:
 
 @tool
 def tool_partcrafter(image_path: str, num_parts: int = 3, scene: bool = False) -> str:
-    """Run PartCrafter: decompose an object image into N articulated parts."""
+    """Run PartCrafter: Generate part based objects"""
     out = _stamp("parts", "glb")
     path = partcrafter(image_path=image_path, out_path=out, num_parts=num_parts, scene=scene)
     return f"Part-decomposed model saved: {path}"
