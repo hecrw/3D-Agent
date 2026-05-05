@@ -1,4 +1,5 @@
 import time
+import re
 from pathlib import Path
 from langchain_core.tools import tool
 
@@ -171,61 +172,6 @@ agent = create_agent(
     done using the tools you have use the tools to fullfill his request""",
 )
 
-def process_chat_stream(user_input, chat_history_list):
-    """
-    Generator that yields dictionaries:
-    {"type": "call_id", "content": "..."}  <-- NEW
-    {"type": "status", "content": "..."}
-    {"type": "text", "content": "..."}
-    """
-    messages = []
-    for msg in chat_history_list:
-        role = "user" if msg["role"] == "user" else "assistant"
-        messages.append({"role": role, "content": msg["content"]})
-    
-    messages.append({"role": "user", "content": user_input})
-    
-    try:
-        f = io.StringIO()
-        with contextlib.redirect_stdout(f):
-            # Use stream_mode="updates" to capture tool starts more accurately
-            for chunk in agent.stream({"messages": messages}, stream_mode="updates"):
-                # 1. Capture and yield stdout prints (Status updates)
-                output = f.getvalue()
-                if output:
-                    lines = output.strip().split('\n')
-                    for line in lines:
-                        # Extract modal call ID if printed in logs (e.g., "job=fc-xxxx")
-                        call_id_match = re.search(r'job=(fc-[a-zA-Z0-9]+)', line)
-                        if call_id_match:
-                            yield {"type": "call_id", "content": call_id_match.group(1)}
-                        
-                        yield {"type": "status", "content": line}
-                    f.truncate(0)
-                    f.seek(0)
-
-                # 2. Check for tool calls in the chunk
-                # LangGraph/LangChain updates often contain the tool name before execution
-                for node_name, node_data in chunk.items():
-                    if "messages" in node_data:
-                        last_msg = node_data["messages"][-1]
-                        
-                        # If the agent decided to use a tool, notify the UI
-                        if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
-                            for tc in last_msg.tool_calls:
-                                tool_name = tc["name"].replace("tool_", "").replace("_", " ")
-                                yield {"type": "status", "content": f"Launching {tool_name}..."}
-
-        # Finally, get the full result
-        result = agent.invoke({"messages": messages})
-        final_text = result["messages"][-1].content
-        
-        # Ensure the final response contains the cleaned text
-        yield {"type": "text", "content": [{"text": final_text}]}
-
-    except Exception as e:
-        yield {"type": "status", "content": f"Error: {str(e)}"}
-        yield {"type": "text", "content": [{"text": f"Agent error: {str(e)}"}]}
 
 def generate_chat_title(user_prompt):
     """Summarizes a user prompt into a 2-4 word snappy title."""
@@ -235,10 +181,76 @@ def generate_chat_title(user_prompt):
     except:
         return user_prompt[:30]
 
-# Keep the old one for compatibility if needed, but point it to the stream
-def process_chat(user_input, chat_history_list):
-    final_text = ""
-    for chunk in process_chat_stream(user_input, chat_history_list):
-        if chunk["type"] == "text":
-            final_text = chunk["content"]
-    return final_text
+def process_chat_stream(user_input, chat_history_list):
+    """
+    Generator that yields dictionaries:
+      {"type": "call_id", "content": "fc-..."}
+      {"type": "status",  "content": "..."}
+      {"type": "text",    "content": "final response string"}
+    """
+    messages = []
+    for msg in chat_history_list:
+        role = "user" if msg["role"] == "user" else "assistant"
+        messages.append({"role": role, "content": msg["content"]})
+    messages.append({"role": "user", "content": user_input})
+    
+    try:
+        f = io.StringIO()
+        final_message = None
+        
+        with contextlib.redirect_stdout(f):
+            for chunk in agent.stream({"messages": messages}, stream_mode="updates"):
+                # 1. Drain any stdout prints into status events
+                output = f.getvalue()
+                if output:
+                    for line in output.strip().split('\n'):
+                        if not line:
+                            continue
+                        # Pick out Modal call IDs if they show up in logs
+                        call_id_match = re.search(r'job=(fc-[a-zA-Z0-9]+)', line)
+                        if call_id_match:
+                            yield {"type": "call_id", "content": call_id_match.group(1)}
+                        yield {"type": "status", "content": line}
+                    f.truncate(0)
+                    f.seek(0)
+                
+                # 2. Inspect the chunk for tool calls + track the latest message
+                for node_name, node_data in chunk.items():
+                    if "messages" not in node_data or not node_data["messages"]:
+                        continue
+                    last_msg = node_data["messages"][-1]
+                    final_message = last_msg  # keep updating; loop ends with the real final
+                    
+                    if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                        for tc in last_msg.tool_calls:
+                            tool_name = tc["name"].replace("tool_", "").replace("_", " ")
+                            yield {"type": "status", "content": f"Launching {tool_name}..."}
+        
+        # 3. Flush any trailing stdout
+        output = f.getvalue()
+        if output:
+            for line in output.strip().split('\n'):
+                if line:
+                    yield {"type": "status", "content": line}
+        
+        # 4. Normalize the final message content to a plain string
+        if final_message is None:
+            final_text = ""
+        else:
+            raw = final_message.content
+            if isinstance(raw, str):
+                final_text = raw
+            elif isinstance(raw, list):
+                final_text = "".join(
+                    block.get("text", "")
+                    for block in raw
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+            else:
+                final_text = str(raw)
+        
+        yield {"type": "text", "content": final_text}
+    
+    except Exception as e:
+        yield {"type": "status", "content": f"Error: {str(e)}"}
+        yield {"type": "text", "content": f"Agent error: {str(e)}"}
