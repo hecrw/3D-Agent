@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import io
 import os
 import random
@@ -10,7 +13,6 @@ from pydantic import BaseModel
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from PIL import Image
@@ -18,8 +20,6 @@ from transformers import CLIPModel, CLIPProcessor
 import torch
 
 import trimesh
-
-load_dotenv()
 
 WORKSPACE = os.environ.get("TRELLIS_WORKSPACE", "")
 TRELLIS_GEN_URL = f"https://{WORKSPACE}--trellis2-generator-web.modal.run"

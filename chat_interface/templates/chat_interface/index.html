@@ -1,278 +1,442 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Agent | Intelligent Asset Generation</title>
+    <title>3D Agent | AI-Powered Generation</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <meta name="csrf-token" content="{{ csrf_token }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #444; }
-        
-        .glass {
-            background: rgba(23, 23, 26, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        
-        .chat-bubble-user {
-            background: #2a2a30;
-            border-radius: 1.2rem;
-            border-bottom-right-radius: 0.2rem;
-        }
-        
-        .chat-bubble-ai {
-            background: transparent;
+        :root {
+            /* Light Mode */
+            --bg: #fcfaf8;
+            --sidebar-bg: #f5f1ed;
+            --accent: #d97757;
+            --text-main: #1a1a1a;
+            --text-muted: #71717a;
+            --border: #e2dfda;
+            --card-bg: white;
+            --msg-user: #f3f0ec;
+            --sidebar-width: 280px;
+            --sidebar-collapsed-width: 88px;
+            --radius: 16px;
         }
 
-        .spinner {
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-left-color: #818cf8;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            animation: spin 0.8s linear infinite;
+        body.dark-mode {
+            /* Dark Mode (Claude Warm Dark) */
+            --bg: #262624;
+            --sidebar-bg: #1e1e1c;
+            --accent: #d97757;
+            --text-main: #e8e4dc;
+            --text-muted: #9c9a94;
+            --border: #353533;
+            --card-bg: #2a2a28;
+            --msg-user: #323230;
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background-color: var(--bg); color: var(--text-main); height: 100vh; display: flex; overflow: hidden; transition: background-color 0.3s; }
+
+        input:focus { outline: none !important; }
+
+        /* Sidebar */
+        #sidebar { 
+            width: var(--sidebar-width); 
+            background: var(--sidebar-bg); 
+            border-right: 1px solid var(--border); 
+            display: flex; 
+            flex-direction: column; 
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+            z-index: 40; 
+            flex-shrink: 0;
+            overflow-x: hidden;
+        }
+        #sidebar.collapsed { width: var(--sidebar-collapsed-width); }
+
+        .sidebar-header { padding: 32px 24px 24px; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }
+        .logo-group { display: flex; align-items: center; gap: 16px; font-weight: 700; font-size: 20px; letter-spacing: -0.02em; white-space: nowrap; }
+        .logo-icon { width: 40px; height: 40px; background: var(--accent); color: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(217, 119, 87, 0.2); }
+        .logo-text { transition: opacity 0.3s; }
+        #sidebar.collapsed .logo-text { opacity: 0; pointer-events: none; }
+
+        .sidebar-nav { padding: 0 16px; margin-bottom: 32px; }
+        .nav-item { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-radius: 14px; font-size: 15px; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.2s; margin-bottom: 4px; white-space: nowrap; }
+        .nav-item svg { flex-shrink: 0; }
+        .nav-item span { transition: opacity 0.3s; }
+        #sidebar.collapsed .nav-item span { opacity: 0; pointer-events: none; }
+        
+        .nav-item:hover { background: rgba(0,0,0,0.03); color: var(--text-main); }
+        body.dark-mode .nav-item:hover { background: rgba(255,255,255,0.03); }
+        .nav-item.active { background: var(--card-bg); color: var(--text-main); box-shadow: 0 2px 8px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.02); }
+
+        .chat-history { flex: 1; overflow-y: auto; padding: 0 16px 24px; }
+        .history-label { padding: 16px 12px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); opacity: 0.5; white-space: nowrap; transition: opacity 0.3s; }
+        #sidebar.collapsed .history-label { opacity: 0; }
+        
+        .history-item-wrapper { display: flex; align-items: center; justify-content: space-between; border-radius: 10px; margin-bottom: 2px; transition: all 0.2s; position: relative; }
+        .history-item-wrapper:hover { background: rgba(0,0,0,0.03); }
+        body.dark-mode .history-item-wrapper:hover { background: rgba(255,255,255,0.03); }
+        .history-item-wrapper.active { background: rgba(217, 119, 87, 0.08); color: var(--accent); }
+        
+        .history-link { flex: 1; display: block; padding: 10px 16px; font-size: 14px; color: var(--text-muted); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .history-item-wrapper.active .history-link { color: var(--accent); font-weight: 500; }
+        .history-item-wrapper:hover .history-link { color: var(--text-main); }
+        
+        .rename-input { flex: 1; margin: 6px 12px; padding: 4px 8px; font-family: inherit; font-size: 14px; border: 1px solid var(--accent); border-radius: 6px; background: var(--card-bg); color: var(--text-main); outline: none; }
+
+        .history-actions { display: none; align-items: center; gap: 4px; padding-right: 8px; }
+        .history-item-wrapper:hover .history-actions { display: flex; }
+        #sidebar.collapsed .history-item-wrapper { opacity: 0; pointer-events: none; }
+        
+        .action-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); cursor: pointer; border: none; background: transparent; transition: all 0.2s; }
+        .action-icon:hover { background: rgba(0,0,0,0.05); color: var(--text-main); }
+        body.dark-mode .action-icon:hover { background: rgba(255,255,255,0.05); }
+
+        /* Main Content */
+        #main-content { flex: 1; display: flex; flex-direction: column; position: relative; min-width: 0; background: var(--bg); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        .header-bar { height: 72px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--bg); z-index: 30; }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+
+        .toggle-btn { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--border); background: var(--card-bg); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: var(--text-muted); flex-shrink: 0; }
+        .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* Chat Container */
+        #chat-container { flex: 1; overflow-y: auto; padding: 24px 0 140px; scroll-behavior: smooth; }
+        .message-box { max-width: 800px; margin: 0 auto 24px; padding: 0 24px; width: 100%; animation: fadeIn 0.4s ease-out; }
+        
+        .user-msg { display: flex; justify-content: flex-end; }
+        .user-content { background: var(--msg-user); padding: 12px 20px; border-radius: 20px; max-width: 85%; font-size: 15px; line-height: 1.5; color: var(--text-main); }
+        
+        .ai-msg { display: flex; flex-direction: column; gap: 12px; }
+        .ai-header { display: flex; align-items: center; gap: 10px; }
+        .ai-icon { width: 26px; height: 26px; background: var(--accent); color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+        .ai-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .ai-text { font-size: 15px; line-height: 1.6; color: var(--text-main); }
+
+        /* Assets */
+        .asset-wrapper { margin-top: 12px; border-radius: 20px; overflow: hidden; border: 1px solid var(--border); background: var(--card-bg); box-shadow: 0 8px 30px rgba(0,0,0,0.04); }
+        .asset-view { width: 100%; aspect-ratio: 16 / 10; }
+        .asset-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.01); }
+
+        /* Input Area */
+        .input-bar-outer { position: absolute; bottom: 0; left: 0; right: 0; padding: 24px; background: linear-gradient(transparent, var(--bg) 50%); display: flex; justify-content: center; z-index: 35; }
+        .input-bar-inner { max-width: 800px; width: 100%; background: var(--card-bg); border: 1px solid var(--border); border-radius: 24px; padding: 6px 6px 6px 20px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); transition: all 0.3s; }
+        .input-bar-inner:focus-within { border-color: var(--accent); box-shadow: 0 8px 32px rgba(217, 119, 87, 0.1); }
+        
+        .hero-bar-container { max-width: 800px; width: 100%; display: flex; justify-content: center; position: relative; }
+        .hero-input { flex: 1; border: none; outline: none; background: transparent !important; color: var(--text-main); font-family: inherit; font-size: 17px; padding: 10px 0; }
+        .hero-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+
+        #user-input { flex: 1; border: none; outline: none; font-family: inherit; font-size: 15px; background: transparent; padding: 10px 0; color: var(--text-main); }
+        .send-action { width: 40px; height: 40px; border-radius: 18px; background: var(--text-main); color: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; border: none; flex-shrink: 0; }
+        .send-action:hover:not(:disabled) { background: var(--accent); transform: scale(1.05); }
+
+        /* Modal */
+        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; animation: fadeIn 0.2s ease-out; }
+        .modal-content { background: var(--card-bg); padding: 32px; border-radius: 24px; width: 100%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); text-align: center; border: 1px solid var(--border); }
+        .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: center; }
+        .btn-premium { padding: 10px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid var(--border); background: var(--card-bg); color: var(--text-main); }
+        .btn-premium:hover { border-color: var(--text-main); }
+
+        /* Empty State */
+        .hero-section { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; text-align: center; }
+        .hero-title { font-size: 48px; font-weight: 700; letter-spacing: -0.04em; line-height: 1.1; margin-bottom: 16px; color: var(--text-main); }
+        .hero-desc { font-size: 18px; color: var(--text-muted); max-width: 480px; margin-bottom: 40px; line-height: 1.5; }
+
+        .markdown-content p { margin-bottom: 12px; }
+        .markdown-content code { background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 6px; font-size: 0.9em; font-family: monospace; }
+        .markdown-content pre { background: #1a1a1a; color: #eee; padding: 20px; border-radius: 16px; margin-bottom: 16px; overflow-x: auto; font-size: 13.5px; }
+
+        .spinner { border: 2px solid rgba(0,0,0,0.05); border-left-color: var(--accent); border-radius: 50%; width: 18px; height: 18px; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-
-        .fade-in {
-            animation: fadeIn 0.4s ease-out forwards;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        #chat-container {
-            scroll-behavior: smooth;
-        }
-
-        input:focus {
-            box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.2);
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
     </style>
 </head>
-<body class="bg-[#0e0e11] text-[#e3e3e3] h-screen flex overflow-hidden">
 
+<body>
     <!-- SIDEBAR -->
-    <aside class="w-72 bg-[#131316] border-r border-[#232326] flex flex-col transition-all duration-300">
-        <div class="p-6">
-            <a href="{% url 'index' %}" class="flex items-center gap-2 mb-8 hover:opacity-80 transition">
-                <div class="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-white">3D</div>
-                <span class="text-lg font-semibold tracking-tight">3D Agent</span>
-            </a>
-            
-            <a href="{% url 'new_chat' %}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#1e1e23] hover:bg-[#25252b] text-sm font-medium transition mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                New Generation
-            </a>
-            
-            <a href="{% url 'gallery' %}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#1e1e23] text-[#a0a0a5] hover:text-white text-sm font-medium transition mb-8">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                Gallery
-            </a>
+    <aside id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo-group">
+                <div class="logo-icon">3D</div>
+                <span class="logo-text">3D Agent</span>
+            </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto px-4 space-y-1">
-            <div class="px-2 text-[10px] font-bold text-[#555] uppercase tracking-[0.1em] mb-2">Recent Chats</div>
+        <nav class="sidebar-nav">
+            <a href="{% url 'new_chat' %}" class="nav-item active">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                <span>New Chat</span>
+            </a>
+            <a href="{% url 'gallery' %}" class="nav-item">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3-3a2 2 0 0 0-3 0L6 21"/></svg>
+                <span>Gallery</span>
+            </a>
+        </nav>
+
+        <div class="chat-history">
+            <div class="history-label">Recent Chats</div>
             {% for session in all_sessions %}
-                <div class="group relative flex items-center">
-                    <a href="{% url 'chat_detail' session.id %}" 
-                       class="flex-1 px-3 py-2.5 rounded-lg text-sm transition truncate 
-                       {% if session.id == active_session.id %}bg-[#1e1e23] text-indigo-400 font-medium{% else %}text-[#888] hover:bg-[#1e1e23] hover:text-[#ccc]{% endif %}">
+                <div class="history-item-wrapper {% if active_session and session.id == active_session.id %}active{% endif %}" id="session-{{ session.id }}">
+                    <a href="{% url 'chat_detail' session.id %}" class="history-link">
                         {{ session.title }}
                     </a>
-                    <div class="absolute right-2 opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
-                        <button onclick="renameChat({{ session.id }}, '{{ session.title }}')" class="p-1 hover:text-white text-[#555]">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    <div class="history-actions">
+                        <button class="action-icon rename-chat-btn" data-id="{{ session.id }}" data-title="{{ session.title }}" title="Rename">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         </button>
-                        <form action="{% url 'delete_chat' session.id %}" method="POST" class="inline">
-                            {% csrf_token %}
-                            <button type="submit" class="p-1 hover:text-red-400 text-[#555]">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>
-                            </button>
-                        </form>
+                        <button class="action-icon delete-chat-btn" data-id="{{ session.id }}" title="Delete" style="color: #ef4444;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>
+                        </button>
                     </div>
                 </div>
             {% endfor %}
         </div>
     </aside>
 
-    <!-- MAIN AREA -->
-    <main class="flex-1 flex flex-col min-w-0 bg-[#0e0e11]">
-        
+    <!-- MAIN CONTENT -->
+    <main id="main-content">
+        <header class="header-bar">
+            <div class="header-left">
+                <button id="toggle-sidebar" class="toggle-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                {% if active_session %}
+                    <div style="font-weight: 600; font-size: 15px; color: var(--text-main);">{{ active_session.title }}</div>
+                {% endif %}
+            </div>
+            <div class="header-right">
+                <button id="theme-toggle" class="toggle-btn">
+                    <svg id="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    <svg id="sun-icon" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                </button>
+            </div>
+        </header>
+
         {% if active_session %}
-            <!-- MESSAGES CONTAINER -->
-            <div id="chat-container" class="flex-1 overflow-y-auto pt-10 pb-32 px-4 md:px-12 lg:px-24 space-y-12">
-                {% for msg in messages %}
-                    <div class="max-w-4xl mx-auto flex flex-col space-y-3 fade-in {% if msg.sender == 'user' %}items-end{% else %}items-start{% endif %}">
-                        <div class="flex items-center gap-3">
-                            {% if msg.sender != 'user' %}
-                                <div class="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-[10px] font-bold text-indigo-400 border border-indigo-500/30">AI</div>
-                            {% endif %}
-                            <span class="text-[11px] text-[#555] font-semibold uppercase tracking-wider">{{ msg.sender }}</span>
-                            {% if msg.sender == 'user' %}
-                                <div class="w-7 h-7 rounded-full bg-[#333] flex items-center justify-center text-[10px] font-bold text-[#888] border border-[#444]">U</div>
-                            {% endif %}
+        <div id="chat-container">
+            {% for msg in messages %}
+            <div class="message-box">
+                {% if msg.sender == 'user' %}
+                    <div class="user-msg">
+                        <div class="user-content markdown-content">{{ msg.text }}</div>
+                    </div>
+                {% else %}
+                    <div class="ai-msg">
+                        <div class="ai-header">
+                            <div class="ai-icon">AI</div>
+                            <div class="ai-label">Assistant</div>
                         </div>
-                        
-                        <div class="max-w-[85%] text-[15px] leading-relaxed p-4 transition-all
-                            {% if msg.sender == 'user' %}chat-bubble-user text-[#eee]{% else %}chat-bubble-ai text-[#bbb]{% endif %}">
-                            {{ msg.text }}
-                        </div>
+                        <div class="ai-text markdown-content">{{ msg.text }}</div>
                         
                         {% if msg.object_path %}
-                            {% if ".glb" in msg.object_path %}
-                                <div class="w-full max-w-[600px] h-[450px] bg-[#131316] rounded-2xl border border-[#232326] overflow-hidden mt-2 relative group shadow-xl">
-                                    <model-viewer src="{{ msg.object_path }}" alt="3D model" auto-rotate camera-controls style="width: 100%; height: 100%;" class="bg-[#131316]"></model-viewer>
-                                    <div class="absolute bottom-3 left-3 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full text-[10px] font-bold text-white/70 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        Interactive 3D Model
-                                    </div>
+                            <div class="asset-wrapper">
+                                {% if ".glb" in msg.object_path %}
+                                    <model-viewer class="asset-view" src="{{ msg.object_path }}" auto-rotate camera-controls></model-viewer>
+                                {% else %}
+                                    <img src="{{ msg.object_path }}" class="w-full h-auto block" alt="Generated asset">
+                                {% endif %}
+                                <div class="asset-footer">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Production Asset</span>
+                                    <a href="{{ msg.object_path }}" download class="toggle-btn" style="width: 34px; height: 34px; border-radius: 10px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                    </a>
                                 </div>
-                            {% elif ".png" in msg.object_path or ".jpg" in msg.object_path or ".jpeg" in msg.object_path %}
-                                <div class="mt-2 group relative max-w-[500px] rounded-2xl overflow-hidden border border-[#232326] shadow-lg">
-                                    <img src="{{ msg.object_path }}" class="w-full h-auto object-cover transition transform hover:scale-[1.02]" alt="Generated asset">
-                                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <a href="{{ msg.object_path }}" download class="bg-white/10 backdrop-blur-md p-2 rounded-full text-white hover:bg-white/20 transition">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                                        </a>
-                                    </div>
-                                </div>
-                            {% endif %}
+                            </div>
                         {% endif %}
                     </div>
-                {% endfor %}
+                {% endif %}
             </div>
-
-            <!-- INPUT AREA -->
-            <div class="fixed bottom-0 left-72 right-0 p-8 bg-gradient-to-t from-[#0e0e11] via-[#0e0e11] to-transparent pointer-events-none">
-                <div class="max-w-3xl mx-auto pointer-events-auto">
-                    <div class="glass rounded-2xl p-2 flex items-center gap-2 shadow-2xl">
-                        <input type="text" id="user-input" placeholder="Describe the 3D model you want to create..." 
-                               class="flex-1 bg-transparent border-none px-4 py-3 text-[15px] focus:outline-none placeholder-[#555] text-white" autofocus>
-                        <button id="send-btn" class="bg-[#e3e3e3] hover:bg-white text-black font-semibold p-2.5 rounded-xl transition flex items-center justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
-                        </button>
-                    </div>
-                    <div class="mt-3 text-center text-[10px] text-[#555] font-medium uppercase tracking-widest">
-                        Powered by Gemini & 3D Generative Pipelines
-                    </div>
-                </div>
-            </div>
-
+            {% endfor %}
+        </div>
         {% else %}
-            <!-- EMPTY STATE -->
-            <div class="flex-1 flex flex-col items-center justify-center p-12 text-center">
-                <div class="mb-8 w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg>
+        <div class="hero-section">
+            <h1 class="hero-title">Imagine in 3D.</h1>
+            <p class="hero-desc">The most advanced AI engine for generating high-fidelity 3D assets from simple text descriptions.</p>
+            
+            <form action="{% url 'new_chat' %}" method="POST" class="hero-bar-container">
+                {% csrf_token %}
+                <div class="input-bar-inner" style="width: 100%; padding-right: 6px;">
+                    <input type="text" name="initial_prompt" class="hero-input" placeholder="A futuristic cyberpunk drone..." required autocomplete="off" autofocus>
+                    <button type="submit" class="send-action" style="width: 52px; height: 52px; border-radius: 22px;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </button>
                 </div>
-                <h1 class="text-4xl font-semibold mb-3 tracking-tight bg-gradient-to-r from-white to-[#888] bg-clip-text text-transparent">Visualize your imagination.</h1>
-                <p class="text-[#888] text-lg max-w-md mb-12">I can generate concept art, search for references, and build production-ready 3D models.</p>
-                
-                <form action="{% url 'new_chat' %}" method="POST" class="w-full max-w-2xl">
-                    {% csrf_token %}
-                    <div class="glass rounded-3xl p-3 flex items-center gap-3 shadow-2xl">
-                        <input type="text" name="initial_prompt" placeholder="Ask me to build a medieval sword, a sci-fi drone, or a simple chair..." 
-                               class="flex-1 bg-transparent border-none px-6 py-4 text-lg focus:outline-none placeholder-[#444] text-white" 
-                               required autocomplete="off" autofocus>
-                        <button type="submit" class="bg-white text-black font-bold px-8 py-4 rounded-2xl hover:bg-[#e3e3e3] transition shadow-lg">
-                            Start
-                        </button>
-                    </div>
-                </form>
-            </div>
+            </form>
+        </div>
         {% endif %}
 
+        {% if active_session %}
+        <div class="input-bar-outer">
+            <div class="input-bar-inner">
+                <input type="text" id="user-input" placeholder="What should we create next?" autocomplete="off">
+                <button id="send-btn" class="send-action">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                </button>
+            </div>
+        </div>
+        {% endif %}
     </main>
 
+    <!-- Delete Modal -->
+    <div id="delete-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 12px;">Delete Chat?</h3>
+            <p style="color: var(--text-muted); font-size: 15px;">This will permanently remove the chat and all its contents.</p>
+            <div class="modal-actions">
+                <button id="modal-cancel" class="btn-premium">Cancel</button>
+                <button id="modal-confirm" class="btn-premium" style="background: #ef4444; color: white; border-color: #ef4444;">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden form for renaming -->
+    <form id="rename-form" method="POST" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="new_title" id="rename-input-field">
+    </form>
+
     <script>
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggle-sidebar');
+        toggleBtn.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+
+        const body = document.body;
+        const themeToggle = document.getElementById('theme-toggle');
+        const moonIcon = document.getElementById('moon-icon');
+        const sunIcon = document.getElementById('sun-icon');
+
+        function updateThemeIcons(isDark) {
+            if (isDark) { moonIcon.classList.add('hidden'); sunIcon.classList.remove('hidden'); }
+            else { moonIcon.classList.remove('hidden'); sunIcon.classList.add('hidden'); }
+        }
+
+        if (localStorage.getItem('theme') === 'dark') { body.classList.add('dark-mode'); updateThemeIcons(true); }
+        themeToggle.addEventListener('click', () => {
+            const isDark = body.classList.toggle('dark-mode');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeIcons(isDark);
+        });
+
+        // Custom Delete Modal Logic
+        let sessionToDelete = null;
+        const deleteModal = document.getElementById('delete-modal');
+        const modalCancel = document.getElementById('modal-cancel');
+        const modalConfirm = document.getElementById('modal-confirm');
+
+        document.querySelectorAll('.delete-chat-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                sessionToDelete = btn.dataset.id;
+                deleteModal.style.display = 'flex';
+            });
+        });
+
+        modalCancel.addEventListener('click', () => {
+            deleteModal.style.display = 'none';
+            sessionToDelete = null;
+        });
+
+        modalConfirm.addEventListener('click', () => {
+            if (sessionToDelete) {
+                window.location.href = `/chat/${sessionToDelete}/delete/`;
+            }
+        });
+
+        document.querySelectorAll('.rename-chat-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const id = btn.dataset.id;
+                const wrapper = document.getElementById(`session-${id}`);
+                const link = wrapper.querySelector('.history-link');
+                const actions = wrapper.querySelector('.history-actions');
+                const currentTitle = btn.dataset.title;
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'rename-input';
+                input.value = currentTitle;
+                
+                link.style.display = 'none';
+                actions.style.display = 'none';
+                wrapper.appendChild(input);
+                input.focus();
+                input.select();
+
+                const finishRename = () => {
+                    const newTitle = input.value.trim();
+                    if (newTitle && newTitle !== currentTitle) {
+                        const form = document.getElementById('rename-form');
+                        form.action = `/chat/${id}/rename/`;
+                        document.getElementById('rename-input-field').value = newTitle;
+                        form.submit();
+                    } else {
+                        input.remove();
+                        link.style.display = 'block';
+                        actions.style.display = '';
+                    }
+                };
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') finishRename();
+                    if (e.key === 'Escape') { input.remove(); link.style.display = 'block'; actions.style.display = ''; }
+                });
+                input.addEventListener('blur', finishRename);
+            });
+        });
+
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
-        
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        const activeSessionId = "{{ active_session.id|default_if_none:'' }}";
+        const activeSessionId = "{% if active_session %}{{ active_session.id }}{% endif %}";
 
         let isGenerating = false;
         let abortController = null;
-        let currentModalCallId = null; // Store the ID of the running Modal job
 
         function toggleGenerating(state) {
             isGenerating = state;
             if (state) {
-                // Square stop button icon
-                sendBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="text-indigo-500"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
-                userInput.disabled = true;
-                userInput.placeholder = "Generation in progress...";
+                sendBtn.innerHTML = `<div class="spinner"></div>`;
+                sendBtn.disabled = true;
+                userInput.placeholder = "Generating...";
             } else {
-                // Send arrow icon
-                sendBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`;
-                userInput.disabled = false;
-                userInput.placeholder = "Describe the 3D model you want to create...";
+                sendBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+                sendBtn.disabled = false;
+                userInput.placeholder = "What should we create next?";
                 userInput.focus();
             }
         }
 
         function appendMessage(sender, text, objectPath = null) {
             if (!chatContainer) return;
-            
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `max-w-4xl mx-auto flex flex-col space-y-3 fade-in ${sender === 'user' ? 'items-end' : 'items-start'}`;
-            
-            const isImage = objectPath && (objectPath.endsWith('.png') || objectPath.endsWith('.jpg') || objectPath.endsWith('.jpeg'));
-            const is3D = objectPath && objectPath.endsWith('.glb');
-
-            let messageHtml = `
-                <div class="flex items-center gap-3">
-                    ${sender !== 'user' ? '<div class="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-[10px] font-bold text-indigo-400 border border-indigo-500/30">AI</div>' : ''}
-                    <span class="text-[11px] text-[#555] font-semibold uppercase tracking-wider">${sender}</span>
-                    ${sender === 'user' ? '<div class="w-7 h-7 rounded-full bg-[#333] flex items-center justify-center text-[10px] font-bold text-[#888] border border-[#444]">U</div>' : ''}
-                </div>
-                <div class="max-w-[85%] text-[15px] leading-relaxed p-4 transition-all
-                    ${sender === 'user' ? 'chat-bubble-user text-[#eee]' : 'chat-bubble-ai text-[#bbb]'}">${text}</div>
-            `;
-
-            if (isImage) {
-                messageHtml += `
-                    <div class="mt-2 group relative max-w-[500px] rounded-2xl overflow-hidden border border-[#232326] shadow-lg">
-                        <img src="${objectPath}" class="w-full h-auto object-cover transition transform hover:scale-[1.02]" alt="Generated asset">
-                        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <a href="${objectPath}" download class="bg-white/10 backdrop-blur-md p-2 rounded-full text-white hover:bg-white/20 transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                            </a>
-                        </div>
-                    </div>
-                `;
+            const box = document.createElement('div');
+            box.className = 'message-box';
+            if (sender === 'user') {
+                box.innerHTML = `<div class="user-msg"><div class="user-content markdown-content">${text}</div></div>`;
+            } else {
+                let assetHtml = '';
+                if (objectPath) {
+                    const is3D = objectPath.toLowerCase().endsWith('.glb');
+                    assetHtml = `<div class="asset-wrapper">${is3D ? `<model-viewer class="asset-view" src="${objectPath}" auto-rotate camera-controls></model-viewer>` : `<img src="${objectPath}" class="w-full h-auto block">`}<div class="asset-footer"><span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Production Asset</span><a href="${objectPath}" download class="toggle-btn" style="width: 34px; height: 34px; border-radius: 10px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a></div></div>`;
+                }
+                box.innerHTML = `<div class="ai-msg"><div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Assistant</div></div><div class="ai-text markdown-content">${marked.parse(text)}</div>${assetHtml}</div>`;
             }
-
-            if (is3D) {
-                messageHtml += `
-                    <div class="w-full max-w-[600px] h-[450px] bg-[#131316] rounded-2xl border border-[#232326] overflow-hidden mt-2 relative group shadow-xl">
-                        <model-viewer src="${objectPath}" alt="3D model" auto-rotate camera-controls style="width: 100%; height: 100%;" class="bg-[#131316]"></model-viewer>
-                        <div class="absolute bottom-3 left-3 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full text-[10px] font-bold text-white/70 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
-                            Interactive 3D Model
-                        </div>
-                    </div>
-                `;
-            }
-
-            msgDiv.innerHTML = messageHtml;
-            chatContainer.appendChild(msgDiv);
+            chatContainer.appendChild(box);
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
         async function fetchAiResponse(text, loadingId) {
-            abortController = new AbortController();
-            toggleGenerating(true);
-            currentModalCallId = null; // Reset for new call
-
+            abortController = new AbortController(); toggleGenerating(true);
             try {
                 const response = await fetch(`/api/chat/${activeSessionId}/message/`, {
                     method: 'POST',
@@ -280,140 +444,67 @@
                     body: JSON.stringify({ text: text }),
                     signal: abortController.signal
                 });
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                const statusEl = document.querySelector(`#${loadingId} .status-text`);
-
+                const reader = response.body.getReader(); const decoder = new TextDecoder();
+                const loadingEl = document.getElementById(loadingId);
+                const statusText = loadingEl ? loadingEl.querySelector('.status-text') : null;
                 while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
-                    
+                    const { done, value } = await reader.read(); if (done) break;
+                    const chunk = decoder.decode(value); const lines = chunk.split('\n');
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
                                 const data = JSON.parse(line.substring(6));
-                                
-                                // Capture the Modal Call ID if sent in the stream
-                                if (data.modal_call_id) {
-                                    currentModalCallId = data.modal_call_id;
-                                }
-
-                                if (data.type === 'status' && statusEl) {
-                                    statusEl.innerText = data.content;
-                                } else if (data.type === 'final') {
-                                    const loadingEl = document.getElementById(loadingId);
-                                    if (loadingEl) loadingEl.remove();
-                                    appendMessage('assistant', data.text, data["3d_object_path"]);
-                                }
-                            } catch (e) { console.error("Error parsing stream chunk", e); }
+                                if (data.type === 'status' && statusText) statusText.innerText = data.content;
+                                else if (data.type === 'final') { if (loadingEl) loadingEl.remove(); appendMessage('assistant', data.text, data["3d_object_path"]); }
+                            } catch (e) {}
                         }
                     }
                 }
-            } catch (error) {
-                if (error.name === 'AbortError') {
-                    // USER CLICKED STOP: Send the cancel request to Modal via Django
-                    if (currentModalCallId) {
-                        console.log("Cancelling Modal Job:", currentModalCallId);
-                        fetch(`/api/chat/stop/`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
-                            body: `call_id=${currentModalCallId}`
-                        });
-                    }
-
-                    const loadingEl = document.getElementById(loadingId);
-                    if (loadingEl) {
-                        loadingEl.innerHTML = `<div class="p-3 bg-[#1e1e23] border border-[#232326] rounded-xl text-[#555] text-xs italic">Generation stopped by user.</div>`;
-                    }
-                } else {
-                    const loadingEl = document.getElementById(loadingId);
-                    if (loadingEl) {
-                        loadingEl.innerHTML = `<div class="p-3 bg-red-900/20 border border-red-500/50 rounded-xl text-red-400 text-xs">Failed to generate response. Check connection.</div>`;
-                    }
-                }
-            } finally {
-                toggleGenerating(false);
-                abortController = null;
-                currentModalCallId = null;
-            }
+            } catch (error) { if (document.getElementById(loadingId)) document.getElementById(loadingId).remove(); } finally { toggleGenerating(false); }
         }
 
         async function handleSend() {
-            if (isGenerating) {
-                if (abortController) {
-                    abortController.abort(); // This triggers the 'AbortError' in fetchAiResponse
-                }
-                return;
-            }
-
-            const text = userInput.value.trim();
-            if (!text || !activeSessionId) return;
-
-            appendMessage('user', text);
-            userInput.value = '';
-
-            const loadingMsgId = 'loading-' + Date.now();
-            const loadingDiv = document.createElement('div');
-            loadingDiv.id = loadingMsgId;
-            loadingDiv.className = `max-w-4xl mx-auto flex flex-col space-y-3 fade-in items-start`;
-            loadingDiv.innerHTML = `
-                <div class="flex items-center gap-3">
-                    <div class="w-7 h-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-[10px] font-bold text-indigo-400 border border-indigo-500/30">AI</div>
-                    <span class="text-[11px] text-[#555] font-semibold uppercase tracking-wider">Assistant</span>
-                </div>
-                <div class="flex items-center gap-3 px-4 py-2 bg-[#1e1e23] rounded-2xl border border-[#232326]">
-                    <div class="spinner"></div> <span class="status-text text-xs text-[#888]">Thinking...</span>
-                </div>
-            `;
-            chatContainer.appendChild(loadingDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            await fetchAiResponse(text, loadingMsgId);
-        }
-
-        function renameChat(id, oldName) {
-            const newName = prompt("Rename session:", oldName);
-            if (newName && newName !== oldName) {
-                const form = document.createElement('form');
-                form.method = 'POST'; form.action = `/chat/${id}/rename/`;
-                const c = document.createElement('input'); c.type = 'hidden'; c.name = 'csrfmiddlewaretoken'; c.value = csrfToken;
-                const t = document.createElement('input'); t.type = 'hidden'; t.name = 'new_title'; t.value = newName;
-                form.appendChild(c); form.appendChild(t); document.body.appendChild(form); form.submit();
-            }
+            if (isGenerating) return; const text = userInput.value.trim(); if (!text || !activeSessionId) return;
+            appendMessage('user', text); userInput.value = '';
+            const loadingId = 'loading-' + Date.now();
+            const loadingBox = document.createElement('div'); loadingBox.id = loadingId; loadingBox.className = 'message-box ai-msg';
+            loadingBox.innerHTML = `<div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Thinking</div></div><div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; margin-top: 8px;"><div class="spinner"></div> <span class="status-text">Processing...</span></div>`;
+            chatContainer.appendChild(loadingBox); chatContainer.scrollTop = chatContainer.scrollHeight;
+            await fetchAiResponse(text, loadingId);
         }
 
         if (sendBtn && userInput) {
             sendBtn.addEventListener('click', handleSend);
             userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSend(); });
         }
-        
-        document.addEventListener("DOMContentLoaded", () => {
-            if (chatContainer) {
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-                const messages = chatContainer.querySelectorAll('#chat-container > div');
-                if (messages.length > 0) {
-                    const lastMsg = messages[messages.length - 1];
-                    const senderSpan = lastMsg.querySelector('span');
-                    if (senderSpan && senderSpan.innerText.toLowerCase().trim() === 'user') {
-                        const promptText = lastMsg.querySelector('.transition-all').innerText;
-                        const loadingMsgId = 'loading-initial';
-                        if (!document.getElementById(loadingMsgId)) {
-                            const loadingDiv = document.createElement('div');
-                            loadingDiv.id = loadingMsgId;
-                            loadingDiv.className = `max-w-4xl mx-auto flex flex-col space-y-3 items-start`;
-                            loadingDiv.innerHTML = `<div class="flex items-center gap-3"><div class="spinner"></div><span class="text-xs text-[#888]">Generating...</span></div>`;
-                            chatContainer.appendChild(loadingDiv);
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-                            fetchAiResponse(promptText, loadingMsgId);
-                        }
-                    }
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            document.querySelectorAll('.markdown-content').forEach(el => el.innerHTML = marked.parse(el.innerText));
+            if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // Auto-start generation if redirected from landing page
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('auto_start') === 'true' && activeSessionId) {
+                const lastMsgEl = document.querySelector('.message-box:last-child .user-content');
+                if (lastMsgEl) {
+                    const text = lastMsgEl.innerText.trim();
+                    const loadingId = 'loading-' + Date.now();
+                    const loadingBox = document.createElement('div');
+                    loadingBox.id = loadingId;
+                    loadingBox.className = 'message-box ai-msg';
+                    loadingBox.innerHTML = `
+                        <div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Thinking</div></div>
+                        <div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; margin-top: 8px;">
+                            <div class="spinner"></div> <span class="status-text">Processing...</span>
+                        </div>
+                    `;
+                    chatContainer.appendChild(loadingBox);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    await fetchAiResponse(text, loadingId);
                 }
             }
         });
     </script>
 </body>
+
 </html>
