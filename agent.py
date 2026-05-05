@@ -101,14 +101,14 @@ def tool_restyle_to_objaverse(image_path: str) -> str:
 @tool
 def tool_trellis2(image_path: str) -> str:
     """Run the TRELLIS pipeline: convert a clean image into a textured 3D GLB file."""
-    out = _stamp("model", "glb")
+    out = _stamp("trellis2", "glb")
     path = trellis2(image_path=image_path, out_path=out)
     return f"3D model saved: {path}"
 
 @tool
 def tool_trellis2_texture(image_path: str, mesh_path: str) -> str:
     """Re-texture an existing mesh using TRELLIS."""
-    out = _stamp("textured", "glb")
+    out = _stamp("trellisTex", "glb")
     path = trellis2_texture(image_path=image_path, mesh_path=mesh_path, out_path=out)
     return f"Textured model saved: {path}"
 
