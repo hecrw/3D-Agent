@@ -104,8 +104,8 @@ def api_send_message(request, session_id):
                 if event["type"] == "status":
                     yield f"data: {json.dumps(event)}\n\n"
                 elif event["type"] == "text":
-                    raw_text = event["content"]
                     
+                    raw_text = event[0]["text"]
                     # Path Extraction for 3D assets
                     file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png))', raw_text)
                     if file_match:
