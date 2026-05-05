@@ -171,10 +171,10 @@ agent = create_agent(
     done using the tools you have use the tools to fullfill his request""",
 )
 
-
 def process_chat_stream(user_input, chat_history_list):
     """
     Generator that yields dictionaries:
+    {"type": "call_id", "content": "..."}  <-- NEW
     {"type": "status", "content": "..."}
     {"type": "text", "content": "..."}
     """
@@ -186,44 +186,46 @@ def process_chat_stream(user_input, chat_history_list):
     messages.append({"role": "user", "content": user_input})
     
     try:
-        # We'll use a custom stream to capture prints from tools
-        def on_print(line):
-            # Filtering out some noise
-            if any(x in line for x in ["[gemini]", "[trellis", "[hunyuan", "[tavily", "[download", "pending...", "job="]):
-                yield {"type": "status", "content": line}
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            # Use stream_mode="updates" to capture tool starts more accurately
+            for chunk in agent.stream({"messages": messages}, stream_mode="updates"):
+                # 1. Capture and yield stdout prints (Status updates)
+                output = f.getvalue()
+                if output:
+                    lines = output.strip().split('\n')
+                    for line in lines:
+                        # Extract modal call ID if printed in logs (e.g., "job=fc-xxxx")
+                        call_id_match = re.search(r'job=(fc-[a-zA-Z0-9]+)', line)
+                        if call_id_match:
+                            yield {"type": "call_id", "content": call_id_match.group(1)}
+                        
+                        yield {"type": "status", "content": line}
+                    f.truncate(0)
+                    f.seek(0)
 
-        # Using stream() to capture tool calls and progress
-        with contextlib.redirect_stdout(VerboseCapture(lambda x: None)): # Just to initialize
-            # This is complex because we want to yield while the stream is running.
-            # We'll use a simpler approach: wrap the agent call and use a custom tool executor if possible,
-            # but for now, let's just capture the stdout of the whole process.
-            
-            f = io.StringIO()
-            with contextlib.redirect_stdout(f):
-                for chunk in agent.stream({"messages": messages}, stream_mode="values"):
-                    # Check if new lines were printed
-                    output = f.getvalue()
-                    if output:
-                        lines = output.strip().split('\n')
-                        for line in lines:
-                            yield {"type": "status", "content": line}
-                        f.truncate(0)
-                        f.seek(0)
-
-                    if "messages" in chunk:
-                        last_msg = chunk["messages"][-1]
+                # 2. Check for tool calls in the chunk
+                # LangGraph/LangChain updates often contain the tool name before execution
+                for node_name, node_data in chunk.items():
+                    if "messages" in node_data:
+                        last_msg = node_data["messages"][-1]
+                        
+                        # If the agent decided to use a tool, notify the UI
                         if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
                             for tc in last_msg.tool_calls:
                                 tool_name = tc["name"].replace("tool_", "").replace("_", " ")
-                                yield {"type": "status", "content": f"Initializing {tool_name}..."}
-        
+                                yield {"type": "status", "content": f"Launching {tool_name}..."}
+
         # Finally, get the full result
         result = agent.invoke({"messages": messages})
         final_text = result["messages"][-1].content
-        yield {"type": "text", "content": final_text}
+        
+        # Ensure the final response contains the cleaned text
+        yield {"type": "text", "content": [{"text": final_text}]}
 
     except Exception as e:
-        yield {"type": "text", "content": f"Agent error: {str(e)}"}
+        yield {"type": "status", "content": f"Error: {str(e)}"}
+        yield {"type": "text", "content": [{"text": f"Agent error: {str(e)}"}]}
 
 def generate_chat_title(user_prompt):
     """Summarizes a user prompt into a 2-4 word snappy title."""
