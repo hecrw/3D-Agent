@@ -306,9 +306,9 @@ class SceneGenerator:
             image: UploadFile = File(...),
             num_parts: int = Form(...),
             seed: int = Form(0),
-            num_tokens: int = Form(1024),
-            num_inference_steps: int = Form(150),
-            guidance_scale: float = Form(7.0),
+            num_tokens: int = Form(8192),
+            num_inference_steps: int = Form(200),
+            guidance_scale: float = Form(4.0),
             rmbg: bool = Form(True),            
         ):
             if not (1 <= num_parts <= 16):
