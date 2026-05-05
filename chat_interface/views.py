@@ -4,7 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import ChatSession, ChatMessage
 import json
 import re
-from agent import process_chat, generate_chat_title, process_chat_stream
+from agent import generate_chat_title, process_chat_stream
 # NEW: Import Modal to handle cancellation
 import modal
 
@@ -92,67 +92,62 @@ def rename_chat(request, session_id):
 
 
 def api_send_message(request, session_id):
-    """This is what the JavaScript calls to get the AI's 3D response."""
-    if request.method == "POST":
-        data = json.loads(request.body)
-        user_text = data.get('text')
-        active_session = get_object_or_404(ChatSession, id=session_id)
+    """JS calls this to get the AI's response (streamed via SSE)."""
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid method"}, status=400)
+    
+    data = json.loads(request.body)
+    user_text = data.get('text')
+    active_session = get_object_or_404(ChatSession, id=session_id)
 
-        last_msg = active_session.messages.all().order_by('created_at').last()
-        if not (last_msg and last_msg.sender == "user" and last_msg.text == user_text):
-            ChatMessage.objects.create(session=active_session, sender="user", text=user_text)
+    last_msg = active_session.messages.all().order_by('created_at').last()
+    if not (last_msg and last_msg.sender == "user" and last_msg.text == user_text):
+        ChatMessage.objects.create(session=active_session, sender="user", text=user_text)
 
-        db_messages = active_session.messages.all().order_by('created_at')
-        history = [{"role": msg.sender, "content": msg.text} for msg in db_messages]
+    db_messages = active_session.messages.all().order_by('created_at')
+    history = [{"role": msg.sender, "content": msg.text} for msg in db_messages]
 
-        if active_session.title == "New Chat" or active_session.title == user_text[:30]:
-             active_session.title = generate_chat_title(user_text)
-             active_session.save()
+    if active_session.title == "New Chat" or active_session.title == user_text[:30]:
+        active_session.title = generate_chat_title(user_text)
+        active_session.save()
 
-        def event_stream():
-            bot_text = ""
-            bot_3d_path = ""
+    def event_stream():
+        for event in process_chat_stream(user_text, history):
+            if event["type"] == "call_id":
+                yield f"data: {json.dumps({'type': 'call_id', 'modal_call_id': event['content']})}\n\n"
             
-            for event in process_chat_stream(user_text, history):
-                # NEW: Catch the call_id from the agent and pass it to frontend
-                if event.get("type") == "call_id":
-                    yield f"data: {json.dumps({'type': 'call_id', 'modal_call_id': event['content']})}\n\n"
-                
-                elif event["type"] == "status":
-                    yield f"data: {json.dumps(event)}\n\n"
-                
-                elif event["type"] == "text":
-                    print(raw_text)
-                    raw_text = event["content"][0]['text']
-                    print(raw_text)
-                    # Path Extraction for 3D assets
-                    file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png))', raw_text)
-                    if file_match:
-                        bot_3d_path = f"/media/3d_outputs/{file_match.group(1)}"
+            elif event["type"] == "status":
+                yield f"data: {json.dumps(event)}\n\n"
+            
+            elif event["type"] == "text":
+                raw_text = event["content"]   # plain string now
+                print(raw_text)
 
-                    bot_text = scrub_bot_text(raw_text)
-                    if bot_3d_path and "preview window" not in bot_text:
-                        bot_text += "\n\nYou can view it in the chat."
+                bot_3d_path = ""
+                file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png))', raw_text)
+                if file_match:
+                    bot_3d_path = f"/media/3d_outputs/{file_match.group(1)}"
 
-                    ChatMessage.objects.create(
-                        session=active_session, 
-                        sender="assistant", 
-                        text=bot_text, 
-                        object_path=bot_3d_path
-                    )
-                    
-                    final_data = {
-                        "type": "final",
-                        "text": bot_text,
-                        "3d_object_path": bot_3d_path
-                    }
-                    yield f"data: {json.dumps(final_data)}\n\n"
+                bot_text = scrub_bot_text(raw_text)
+                if bot_3d_path and "preview window" not in bot_text:
+                    bot_text += "\n\nYou can view it in the chat."
 
-        return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+                ChatMessage.objects.create(
+                    session=active_session,
+                    sender="assistant",
+                    text=bot_text,
+                    object_path=bot_3d_path,
+                )
 
-    return JsonResponse({"error": "Invalid method"}, status=400)
+                final_data = {
+                    "type": "final",
+                    "text": bot_text,
+                    "3d_object_path": bot_3d_path,
+                }
+                yield f"data: {json.dumps(final_data)}\n\n"
 
-# NEW VIEW: To stop the Modal container
+    return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+
 def api_stop_chat(request):
     """Kills the running Modal container using the call_id."""
     if request.method == "POST":
