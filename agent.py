@@ -149,7 +149,6 @@ def tool_inspect_image(image_path: str, question: str) -> str:
     Use this to:
     - Judge quality of generated concept images or rendered 3D-model views
     - Verify a retrieved/downloaded image actually depicts the requested subject
-    - Decide whether to regenerate, restyle, or proceed to the next pipeline step
 
     image_path: absolute path to a local image (.png/.jpg/.jpeg/.webp/.gif).
     question: what to assess, e.g. "Does this depict a single cyberpunk drone,
