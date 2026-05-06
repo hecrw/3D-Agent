@@ -1,12 +1,38 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from .models import ChatSession, ChatMessage
 import json
+import os
 import re
+from urllib.parse import urlparse, unquote
 from agent import generate_chat_title, process_chat_stream
 # NEW: Import Modal to handle cancellation
 import modal
+
+
+def _delete_local_asset(object_path):
+    """Remove the file under MEDIA_ROOT that object_path points to. Skips external URLs."""
+    if not object_path:
+        return
+    parsed = urlparse(object_path)
+    if parsed.scheme in ("http", "https"):
+        return  # external image, nothing local to remove
+    path = unquote(parsed.path or object_path)
+    media_url = settings.MEDIA_URL.rstrip("/") if settings.MEDIA_URL else ""
+    if media_url and path.startswith(media_url + "/"):
+        rel = path[len(media_url) + 1:]
+        full = os.path.join(settings.MEDIA_ROOT, rel)
+    elif os.path.isabs(path):
+        full = path
+    else:
+        full = os.path.join(settings.MEDIA_ROOT, path)
+    try:
+        if os.path.isfile(full):
+            os.remove(full)
+    except OSError:
+        pass
 
 # --- HELPER: CLEAN THE BOT OUTPUT ---
 def scrub_bot_text(raw_text):
@@ -97,8 +123,17 @@ def new_chat(request):
 
 def delete_chat(request, session_id):
     chat = get_object_or_404(ChatSession, id=session_id)
+    messages = list(chat.messages.all())
+    for msg in messages:
+        if msg.attachment:
+            try:
+                msg.attachment.delete(save=False)
+            except Exception:
+                pass
+        _delete_local_asset(msg.object_path)
+    # FK is SET_NULL, so delete messages explicitly to avoid orphans in the gallery
+    chat.messages.all().delete()
     chat.delete()
-    # Always redirect to index (landing page) after deletion
     return redirect('index')
 
 
