@@ -32,14 +32,25 @@ import sys
 import contextlib
 import io
 
-class VerboseCapture(io.IOBase):
-    def __init__(self, callback):
-        self.callback = callback
-    def write(self, b):
-        line = b.strip()
-        if line:
-            self.callback(line)
-        return len(b)
+
+class _TeeStdout(io.TextIOBase):
+    """Write-through stdout proxy: forwards to the real terminal AND a buffer."""
+    def __init__(self, buf, original):
+        self._buf = buf
+        self._original = original
+    def write(self, s):
+        try:
+            self._original.write(s)
+            self._original.flush()
+        except Exception:
+            pass
+        return self._buf.write(s)
+    def flush(self):
+        try:
+            self._original.flush()
+        except Exception:
+            pass
+        self._buf.flush()
 
 def tool_wrapper(func):
     def wrapper(*args, **kwargs):
@@ -157,6 +168,92 @@ ALL_TOOLS = [
 ]
 
 
+# --- Friendly status translation ---
+
+TOOL_LABELS = {
+    "tool_web_search": "Searching the web",
+    "tool_image_search": "Searching for reference images",
+    "tool_download_image": "Downloading image",
+    "tool_generate_concept_image": "Generating concept image",
+    "tool_restyle_to_objaverse": "Restyling to Objaverse",
+    "tool_trellis2": "Generating 3D model",
+    "tool_trellis2_texture": "Re-texturing model",
+    "tool_partcrafter": "Decomposing into parts",
+    "tool_hunyuan3d2": "Generating 3D model",
+    "tool_render_mesh_views": "Rendering views",
+    "tool_score_alignment": "Scoring alignment",
+}
+
+PIPELINE_LABELS = {
+    "trellis2": "TRELLIS",
+    "trellis2_texture": "TRELLIS texture",
+    "partcrafter": "PartCrafter",
+    "hunyuan3d2": "Hunyuan3D",
+}
+
+
+def _friendly_tool_label(name: str) -> str:
+    return TOOL_LABELS.get(name, name.replace("tool_", "").replace("_", " ").capitalize())
+
+
+_TAG_LINE_RE = re.compile(r'^\[([^\]]+)\]\s*(.*)$')
+
+
+def _friendly_status(line: str):
+    """Map a raw stdout line from tools.py into a user-facing status, or None to drop."""
+    line = line.strip()
+    if not line:
+        return None
+    m = _TAG_LINE_RE.match(line)
+    if not m:
+        return None  # drop anything we don't recognize
+
+    tag, rest = m.group(1), m.group(2)
+
+    if tag == "gemini":
+        if rest.startswith("concept"):
+            return "Generating concept image..."
+        if rest.startswith("restyle"):
+            return "Restyling to Objaverse..."
+        return None  # "saved ..." etc.
+    if tag == "tavily":
+        if rest.startswith("image search"):
+            return "Searching for reference images..."
+        if rest.startswith("search"):
+            return "Searching the web..."
+        return None
+    if tag == "download":
+        if rest.startswith("saved"):
+            return None
+        return "Downloading image..."
+    if tag == "views":
+        return None  # per-view path spam
+
+    label = PIPELINE_LABELS.get(tag)
+    if label is None:
+        return None  # unknown tag, drop
+
+    if rest.startswith("submit ->") or rest.startswith("submit "):
+        if "failed" in rest:
+            return f"{label}: reconnecting..."
+        return f"Sending image to {label}..."
+    if rest.startswith("job="):
+        return None  # already surfaced as call_id
+    if rest.startswith("pending"):
+        return f"{label} is working on it..."
+    if rest.startswith("downloading from volume"):
+        return f"Receiving result from {label}..."
+    if rest.startswith("volume download failed"):
+        return None
+    if rest.startswith("done"):
+        return f"{label} finished."
+    if "retrying" in rest:
+        return f"{label} retrying..."
+    if rest.startswith("WARN"):
+        return None
+    return None
+
+
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 llm = ChatGoogleGenerativeAI(
@@ -221,41 +318,51 @@ def process_chat_stream(user_input, chat_history_list, user_image_url=None):
     try:
         f = io.StringIO()
         final_message = None
-        
-        with contextlib.redirect_stdout(f):
+        last_status = None
+
+        def drain_stdout():
+            nonlocal last_status
+            output = f.getvalue()
+            if not output:
+                return
+            for line in output.strip().split('\n'):
+                if not line:
+                    continue
+                # Pick out Modal call IDs even if we drop the line for the user
+                call_id_match = re.search(r'job=(fc-[a-zA-Z0-9]+)', line)
+                if call_id_match:
+                    yield {"type": "call_id", "content": call_id_match.group(1)}
+                friendly = _friendly_status(line)
+                if friendly and friendly != last_status:
+                    last_status = friendly
+                    yield {"type": "status", "content": friendly}
+            f.truncate(0)
+            f.seek(0)
+
+        with contextlib.redirect_stdout(_TeeStdout(f, sys.__stdout__)):
             for chunk in agent.stream({"messages": messages}, stream_mode="updates"):
-                # 1. Drain any stdout prints into status events
-                output = f.getvalue()
-                if output:
-                    for line in output.strip().split('\n'):
-                        if not line:
-                            continue
-                        # Pick out Modal call IDs if they show up in logs
-                        call_id_match = re.search(r'job=(fc-[a-zA-Z0-9]+)', line)
-                        if call_id_match:
-                            yield {"type": "call_id", "content": call_id_match.group(1)}
-                        yield {"type": "status", "content": line}
-                    f.truncate(0)
-                    f.seek(0)
-                
+                # 1. Drain any stdout prints into friendly status events
+                for evt in drain_stdout():
+                    yield evt
+
                 # 2. Inspect the chunk for tool calls + track the latest message
                 for node_name, node_data in chunk.items():
                     if "messages" not in node_data or not node_data["messages"]:
                         continue
                     last_msg = node_data["messages"][-1]
                     final_message = last_msg  # keep updating; loop ends with the real final
-                    
+
                     if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
                         for tc in last_msg.tool_calls:
-                            tool_name = tc["name"].replace("tool_", "").replace("_", " ")
-                            yield {"type": "status", "content": f"Launching {tool_name}..."}
-        
+                            label = _friendly_tool_label(tc["name"])
+                            status = f"{label}..."
+                            if status != last_status:
+                                last_status = status
+                                yield {"type": "status", "content": status}
+
         # 3. Flush any trailing stdout
-        output = f.getvalue()
-        if output:
-            for line in output.strip().split('\n'):
-                if line:
-                    yield {"type": "status", "content": line}
+        for evt in drain_stdout():
+            yield evt
         
         # 4. Normalize the final message content to a plain string
         if final_message is None:
