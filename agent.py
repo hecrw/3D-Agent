@@ -77,7 +77,8 @@ def tool_generate_concept_image(prompt: str) -> str:
 
 @tool
 def tool_restyle_to_objaverse(image_path: str) -> str:
-    """Restyle any photo or image into the clean Objaverse dataset style."""
+    """Restyle any photo or image into the clean Objaverse dataset style. 
+    this is done usually after generation or retrieving an image online"""
     out = _stamp("objaverse", "png")
     path = restyle_to_objaverse(image_path=image_path, out_path=out)
     return f"Restyled image saved: {path}"
