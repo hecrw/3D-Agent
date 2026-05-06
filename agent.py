@@ -76,7 +76,14 @@ def tool_image_search(query: str) -> str:
 def tool_download_image(url: str) -> str:
     """Download an image from a URL and save it locally."""
     out = _stamp("downloaded", "jpg")
-    path = download_image(url=url, out_path=out)
+    try:
+        path = download_image(url=url, out_path=out)
+    except Exception as e:
+        return (
+            f"Could not download {url} ({type(e).__name__}: {e}). "
+            "The host likely blocks hotlinking. Try a different image URL "
+            "from the search results."
+        )
     return f"Image saved: {path}"
 
 @tool
