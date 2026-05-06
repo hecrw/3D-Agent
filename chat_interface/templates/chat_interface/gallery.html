@@ -121,8 +121,8 @@
         .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: center; }
 
         /* Checkbox */
-        .card-checkbox { position: absolute; top: 12px; left: 12px; width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--border); background: var(--card-bg); cursor: pointer; appearance: none; transition: all 0.2s; opacity: 0; }
-        .asset-card:hover .card-checkbox, .card-checkbox:checked { opacity: 1; }
+        .card-checkbox { position: absolute; top: 12px; left: 12px; width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--border); background: var(--card-bg); cursor: pointer; appearance: none; transition: all 0.2s; opacity: 0; pointer-events: none; z-index: 10; }
+        .asset-grid.select-mode .card-checkbox, .card-checkbox:checked { opacity: 1; pointer-events: auto; }
         .card-checkbox:checked { background: var(--accent); border-color: var(--accent); }
         .card-checkbox:checked::after { content: '✓'; color: white; font-size: 11px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 
@@ -349,13 +349,13 @@
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         
         let selectMode = false;
+        const assetGrid = document.querySelector('.asset-grid');
         if (selectModeBtn) {
             selectModeBtn.addEventListener('click', () => {
                 selectMode = !selectMode;
                 selectModeBtn.innerText = selectMode ? 'Cancel' : 'Select Multiple';
-                selectModeBtn.classList.toggle('bg-[#d97757]', selectMode);
-                selectModeBtn.classList.toggle('text-white', selectMode);
-                document.querySelectorAll('.card-checkbox').forEach(c => c.style.opacity = selectMode ? '1' : '');
+                selectModeBtn.classList.toggle('active', selectMode);
+                if (assetGrid) assetGrid.classList.toggle('select-mode', selectMode);
                 if (!selectMode) { document.querySelectorAll('.asset-checkbox').forEach(cb => cb.checked = false); updateSelectedUI(); }
             });
             document.querySelectorAll('.asset-checkbox').forEach(cb => cb.addEventListener('change', updateSelectedUI));
