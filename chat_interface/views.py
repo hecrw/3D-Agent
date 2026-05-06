@@ -184,7 +184,7 @@ def api_send_message(request, session_id):
 
                 bot_3d_path = ""
                 # Check for local outputs first
-                file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png))', raw_text)
+                file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png|jpe?g|webp|gif))', raw_text, re.IGNORECASE)
                 if file_match:
                     filename = file_match.group(1).lstrip('/\\')
                     bot_3d_path = f"/media/3d_outputs/{filename}"
