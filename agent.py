@@ -143,6 +143,53 @@ def tool_render_mesh_views(mesh_path: str) -> str:
     return "\n".join(lines)
 
 @tool
+def tool_inspect_image(image_path: str, question: str) -> str:
+    """View a local image with vision and answer a question about it.
+
+    Use this to:
+    - Judge quality of generated concept images or rendered 3D-model views
+    - Verify a retrieved/downloaded image actually depicts the requested subject
+    - Decide whether to regenerate, restyle, or proceed to the next pipeline step
+
+    image_path: absolute path to a local image (.png/.jpg/.jpeg/.webp/.gif).
+    question: what to assess, e.g. "Does this depict a single cyberpunk drone,
+              centered, on a clean background? List any defects."
+    """
+    import base64, mimetypes
+    from langchain_core.messages import HumanMessage
+
+    if not os.path.isfile(image_path):
+        return f"inspect_image: file not found at {image_path}"
+
+    mime, _ = mimetypes.guess_type(image_path)
+    if not mime or not mime.startswith("image/"):
+        mime = "image/png"
+
+    try:
+        with open(image_path, "rb") as fh:
+            b64 = base64.b64encode(fh.read()).decode()
+    except OSError as e:
+        return f"inspect_image: could not read {image_path} ({e})"
+
+    msg = HumanMessage(content=[
+        {"type": "text", "text": question},
+        {"type": "image_url", "image_url": f"data:{mime};base64,{b64}"},
+    ])
+    try:
+        resp = llm.invoke([msg])
+    except Exception as e:
+        return f"inspect_image: model call failed ({type(e).__name__}: {e})"
+
+    raw = resp.content
+    if isinstance(raw, list):
+        return "".join(
+            b.get("text", "") for b in raw
+            if isinstance(b, dict) and b.get("type") == "text"
+        ) or str(raw)
+    return raw if isinstance(raw, str) else str(raw)
+
+
+@tool
 def tool_score_alignment(mesh_path: str, prompt: str) -> str:
     """Score how well a generated mesh matches the text prompt by rendering
     multi-view images and comparing each view to the prompt with CLIP.
@@ -171,6 +218,7 @@ ALL_TOOLS = [
     tool_trellis2_texture,
     tool_partcrafter,
     tool_hunyuan3d2,
+    tool_inspect_image,
     tool_score_alignment,
 ]
 
@@ -188,6 +236,7 @@ TOOL_LABELS = {
     "tool_partcrafter": "Decomposing into parts",
     "tool_hunyuan3d2": "Generating 3D model",
     "tool_render_mesh_views": "Rendering views",
+    "tool_inspect_image": "Inspecting image",
     "tool_score_alignment": "Scoring alignment",
 }
 
@@ -274,11 +323,20 @@ agent = create_agent(
     tools=ALL_TOOLS,
     system_prompt="""You are a helpful assistant.
     If the user provides an image, you will see an [Uploaded Image Local Path: ...] in the message.
-    CRITICAL: Never use 'input_file_0.png' or any other generated path. 
+    CRITICAL: Never use 'input_file_0.png' or any other generated path.
     Use the EXACT absolute path provided in the [Uploaded Image Local Path: ...] tag for any tool that requires an 'image_path'.
     If you see an image but no local path is provided in the text, ask the user for clarification.
-    Make conversation with the user, but if his request can be 
-    done using the tools you have, use the tools to fulfill his request.""",
+    Make conversation with the user, but if his request can be
+    done using the tools you have, use the tools to fulfill his request.
+
+    You can also act as a vision model. After any tool that produces or
+    fetches an image (concept generation, Objaverse restyle, image search +
+    download, mesh-view renders), call tool_inspect_image(image_path, question)
+    to actually look at it and judge quality, subject match, framing, and
+    obvious defects. Use that judgment to decide whether to proceed to the
+    next pipeline step, regenerate with a tweaked prompt, or pick a different
+    reference URL. Be specific in the question (subject, expected style,
+    things that would disqualify it).""",
 )
 
 
