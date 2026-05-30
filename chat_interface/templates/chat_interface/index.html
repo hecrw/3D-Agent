@@ -590,6 +590,124 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
+        // --- Human-in-the-loop approval gate -------------------------------
+        // The agent pauses before an expensive 3D-generation tool and asks the
+        // user to review the image it is about to send. The user can Approve,
+        // Edit the tool args, or Reject with feedback (which makes the agent
+        // regenerate). The decision is POSTed to the resume endpoint, whose
+        // SSE stream is read exactly like the initial send.
+        function renderApprovalGate(data) {
+            const box = document.createElement('div');
+            box.className = 'message-box ai-msg';
+            const imgHtml = data.image_url
+                ? `<div style="margin:10px 0; max-width:280px; border-radius:12px; overflow:hidden; border:1px solid var(--border);"><img src="${data.image_url}" style="width:100%; height:auto; display:block;"></div>`
+                : '<div style="color:var(--text-muted); font-size:13px; margin:8px 0;">(no preview image available)</div>';
+            const decisions = data.allowed_decisions || ['approve', 'reject'];
+            const btn = (id, label, primary) =>
+                `<button data-gate="${id}" class="toggle-btn" style="width:auto; padding:8px 16px; border-radius:10px; font-weight:600; ${primary ? 'background:var(--accent,#4f46e5); color:#fff;' : ''}">${label}</button>`;
+            let controls = '';
+            if (decisions.includes('approve')) controls += btn('approve', 'Approve', true);
+            if (decisions.includes('edit'))    controls += btn('edit', 'Edit');
+            if (decisions.includes('reject'))  controls += btn('reject', 'Reject');
+
+            box.innerHTML = `
+                <div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Approval needed</div></div>
+                <div class="ai-text" style="margin-top:6px;">Review the image before I send it to <b>${data.label || data.tool}</b>. Does this look right?</div>
+                ${imgHtml}
+                <div data-gate-feedback style="display:none; margin:8px 0;">
+                    <textarea data-gate-msg placeholder="What should change? (e.g. white background, show the handle)" style="width:100%; min-height:60px; padding:8px; border-radius:8px; border:1px solid var(--border); background:transparent; color:inherit; resize:vertical;"></textarea>
+                </div>
+                <div data-gate-controls style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">${controls}</div>
+            `;
+            chatContainer.appendChild(box);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            const lockButtons = () => box.querySelectorAll('[data-gate]').forEach(b => b.disabled = true);
+
+            box.querySelectorAll('[data-gate]').forEach(b => {
+                b.addEventListener('click', () => {
+                    const kind = b.getAttribute('data-gate');
+                    const fb = box.querySelector('[data-gate-feedback]');
+                    const msgEl = box.querySelector('[data-gate-msg]');
+
+                    // Reject reveals a feedback box first, then sends on a 2nd click.
+                    if (kind === 'reject' && fb.style.display === 'none') {
+                        fb.style.display = 'block';
+                        b.innerText = 'Send feedback';
+                        msgEl.focus();
+                        return;
+                    }
+
+                    let decision;
+                    if (kind === 'approve') {
+                        decision = { type: 'approve' };
+                    } else if (kind === 'reject') {
+                        decision = { type: 'reject', message: (msgEl.value || '').trim() || 'The image is not acceptable; please regenerate it.' };
+                    } else if (kind === 'edit') {
+                        const edited = prompt('Edit tool arguments (JSON):', JSON.stringify(data.args || {}, null, 2));
+                        if (edited === null) return; // cancelled
+                        let args;
+                        try { args = JSON.parse(edited); }
+                        catch (e) { alert('Invalid JSON — not sent.'); return; }
+                        decision = { type: 'edit', edited_action: { name: data.tool, args } };
+                    }
+
+                    lockButtons();
+                    box.querySelector('[data-gate-controls]').innerHTML =
+                        '<span style="color:var(--text-muted); font-size:13px;">Sending decision…</span>';
+                    resumeAiResponse([decision]);
+                });
+            });
+        }
+
+        async function resumeAiResponse(decisions) {
+            abortController = new AbortController(); toggleGenerating(true);
+            const loadingId = 'loading-' + Date.now();
+            const loadingBox = document.createElement('div');
+            loadingBox.id = loadingId; loadingBox.className = 'message-box ai-msg';
+            loadingBox.innerHTML = `<div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Assistant</div></div><div style="display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:13px; margin-top:8px;"><div class="spinner"></div> <span class="status-text">Resuming…</span></div>`;
+            chatContainer.appendChild(loadingBox); chatContainer.scrollTop = chatContainer.scrollHeight;
+            try {
+                const response = await fetch(`/api/chat/${activeSessionId}/resume/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ decisions }),
+                    signal: abortController.signal
+                });
+                await consumeAgentStream(response, loadingId);
+            } catch (error) {
+                if (document.getElementById(loadingId)) document.getElementById(loadingId).remove();
+            } finally { toggleGenerating(false); }
+        }
+
+        // Shared SSE reader for both the initial send and a resume.
+        async function consumeAgentStream(response, loadingId) {
+            const reader = response.body.getReader(); const decoder = new TextDecoder();
+            const loadingEl = document.getElementById(loadingId);
+            const statusText = loadingEl ? loadingEl.querySelector('.status-text') : null;
+            while (true) {
+                const { done, value } = await reader.read(); if (done) break;
+                const chunk = decoder.decode(value); const lines = chunk.split('\n');
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const data = JSON.parse(line.substring(6));
+                        if (data.type === 'call_id') {
+                            currentModalCallId = data.modal_call_id;
+                        } else if (data.type === 'status' && statusText) {
+                            statusText.innerText = data.content;
+                        } else if (data.type === 'interrupt') {
+                            if (loadingEl) loadingEl.remove();
+                            renderApprovalGate(data);
+                        } else if (data.type === 'final') {
+                            if (loadingEl) loadingEl.remove();
+                            appendMessage('assistant', data.text, data["3d_object_path"]);
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+
         async function fetchAiResponse(text, loadingId, imageData = null) {
             abortController = new AbortController(); toggleGenerating(true);
             try {
@@ -614,6 +732,9 @@
                                     console.log("Captured Call ID:", currentModalCallId);
                                 } else if (data.type === 'status' && statusText) {
                                     statusText.innerText = data.content;
+                                } else if (data.type === 'interrupt') {
+                                    if (loadingEl) loadingEl.remove();
+                                    renderApprovalGate(data);
                                 } else if (data.type === 'final') {
                                     if (loadingEl) loadingEl.remove();
                                     appendMessage('assistant', data.text, data["3d_object_path"]);

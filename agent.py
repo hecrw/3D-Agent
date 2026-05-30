@@ -318,9 +318,50 @@ llm = ChatGoogleGenerativeAI(
 )
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import HumanInTheLoopMiddleware
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+# --- Human-in-the-loop gate ---------------------------------------------------
+# Pause for human approval right before any expensive 3D-generation tool runs.
+# Because the pipeline order is (image produced) -> (3D generation tool), gating
+# the generation tools surfaces the "does this image work?" decision: the agent
+# pauses showing the image it is about to send to the pipeline, and the human
+# can approve it, or reject to make the agent regenerate the image.
+# Each gated tool allows three decisions: approve (run as-is), edit (tweak the
+# tool args, e.g. swap the image or num_parts, then run), and reject (the human
+# types feedback which the agent sees as an error and uses to regenerate). We
+# deliberately omit "respond" — a human cannot fabricate a GLB on the tool's
+# behalf.
+_GATE = {"allowed_decisions": ["approve", "edit", "reject"]}
+GATED_TOOLS = {
+    "tool_trellis2": _GATE,
+    "tool_trellis2_texture": _GATE,
+    "tool_partcrafter": _GATE,
+    "tool_hunyuan3d2": _GATE,
+}
+
+# Durable checkpointer so a paused run survives a server restart. The thread_id
+# (the chat session id) is supplied per-invocation in process_chat_stream.
+# `.setup()` creates the checkpoint tables if missing; check_same_thread=False
+# because Django may resume on a different worker thread than the one that paused.
+import sqlite3
+from django.conf import settings as _dj_settings
+
+_CKPT_PATH = str(Path(_dj_settings.BASE_DIR) / "agent_checkpoints.sqlite3")
+_ckpt_conn = sqlite3.connect(_CKPT_PATH, check_same_thread=False)
+checkpointer = SqliteSaver(_ckpt_conn)
+checkpointer.setup()
+
+hitl = HumanInTheLoopMiddleware(
+    interrupt_on=GATED_TOOLS,
+    description_prefix="Approve before generating the 3D model",
+)
+
 agent = create_agent(
     model=llm,
     tools=ALL_TOOLS,
+    middleware=[hitl],
+    checkpointer=checkpointer,
     system_prompt="""You are a helpful assistant.
     If the user provides an image, you will see an [Uploaded Image Local Path: ...] in the message.
     CRITICAL: Never use 'input_file_0.png' or any other generated path.
@@ -348,12 +389,135 @@ def generate_chat_title(user_prompt):
     except:
         return user_prompt[:30]
 
-def process_chat_stream(user_input, chat_history_list, user_image_url=None):
+def _thread_config(session_id):
+    """LangGraph config that ties a run to a chat session so the checkpointer
+    can pause and later resume the *same* conversation thread."""
+    return {"configurable": {"thread_id": f"chat-{session_id}"}}
+
+
+def _normalize_text(message):
+    """Collapse an AIMessage's content (str or content-block list) to plain text."""
+    if message is None:
+        return ""
+    raw = message.content
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, list):
+        return "".join(
+            block.get("text", "")
+            for block in raw
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return str(raw)
+
+
+def _pending_interrupt(config):
+    """If the agent paused for human approval, return a UI-friendly dict
+    describing the first gated tool call; otherwise None.
+
+    Shape (verified against HumanInTheLoopMiddleware runtime payload):
+      state.interrupts[0].value = {
+        "action_requests": [{"name", "args", "description"}, ...],
+        "review_configs":  [{"action_name", "allowed_decisions"}, ...],
+      }
+    """
+    state = agent.get_state(config)
+    if not state.interrupts:
+        return None
+    value = state.interrupts[0].value
+    reqs = value.get("action_requests") or []
+    cfgs = value.get("review_configs") or []
+    if not reqs:
+        return None
+    req = reqs[0]
+    args = req.get("args") or {}
+    decisions = cfgs[0].get("allowed_decisions") if cfgs else ["approve", "reject"]
+    return {
+        "type": "interrupt",
+        "tool": req.get("name", ""),
+        "label": _friendly_tool_label(req.get("name", "")),
+        "image_path": args.get("image_path", ""),
+        "args": args,
+        "allowed_decisions": decisions,
+    }
+
+
+def _run_stream(stream_input, config):
+    """Shared driver for both a fresh run and a resume. Yields the same event
+    dicts as process_chat_stream and ends with EITHER an `interrupt` event (the
+    agent paused for approval) or a `text` event (the run finished)."""
+    f = io.StringIO()
+    final_message = None
+    last_status = None
+
+    def drain_stdout():
+        nonlocal last_status
+        output = f.getvalue()
+        if not output:
+            return
+        for line in output.strip().split('\n'):
+            if not line:
+                continue
+            # Pick out Modal call IDs even if we drop the line for the user
+            call_id_match = re.search(r'job=(fc-[a-zA-Z0-9]+)', line)
+            if call_id_match:
+                yield {"type": "call_id", "content": call_id_match.group(1)}
+            friendly = _friendly_status(line)
+            if friendly and friendly != last_status:
+                last_status = friendly
+                yield {"type": "status", "content": friendly}
+        f.truncate(0)
+        f.seek(0)
+
+    with contextlib.redirect_stdout(_TeeStdout(f, sys.__stdout__)):
+        for chunk in agent.stream(stream_input, config, stream_mode="updates"):
+            # 1. Drain any stdout prints into friendly status events
+            for evt in drain_stdout():
+                yield evt
+
+            # 2. Inspect the chunk for tool calls + track the latest message
+            for node_name, node_data in chunk.items():
+                if not isinstance(node_data, dict):
+                    continue
+                if "messages" not in node_data or not node_data["messages"]:
+                    continue
+                last_msg = node_data["messages"][-1]
+                final_message = last_msg  # keep updating; loop ends with the real final
+
+                if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                    for tc in last_msg.tool_calls:
+                        label = _friendly_tool_label(tc["name"])
+                        status = f"{label}..."
+                        if status != last_status:
+                            last_status = status
+                            yield {"type": "status", "content": status}
+
+    # 3. Flush any trailing stdout
+    for evt in drain_stdout():
+        yield evt
+
+    # 4. Did the agent pause for human approval? If so, surface the gate
+    #    instead of a final answer — the run is suspended in the checkpointer.
+    interrupt = _pending_interrupt(config)
+    if interrupt is not None:
+        yield interrupt
+        return
+
+    # 5. Otherwise the run finished: emit the normalized final text.
+    yield {"type": "text", "content": _normalize_text(final_message)}
+
+
+def process_chat_stream(user_input, chat_history_list, user_image_url=None,
+                        session_id=None):
     """
     Generator that yields dictionaries:
-      {"type": "call_id", "content": "fc-..."}
-      {"type": "status",  "content": "..."}
-      {"type": "text",    "content": "final response string"}
+      {"type": "call_id",   "content": "fc-..."}
+      {"type": "status",    "content": "..."}
+      {"type": "interrupt", "tool": ..., "image_path": ..., "allowed_decisions": [...]}
+      {"type": "text",      "content": "final response string"}
+
+    session_id ties the run to a checkpointer thread so an approval gate can be
+    resumed later via resume_chat_stream(session_id, decisions).
     """
     messages = []
     for msg in chat_history_list:
@@ -368,7 +532,7 @@ def process_chat_stream(user_input, chat_history_list, user_image_url=None):
                 {"type": "image_url", "image_url": msg["image"]}
             ]
         messages.append({"role": role, "content": content})
-    
+
     # Current message
     if user_image_url:
         messages.append({
@@ -380,74 +544,29 @@ def process_chat_stream(user_input, chat_history_list, user_image_url=None):
         })
     else:
         messages.append({"role": "user", "content": user_input})
-    
+
     try:
-        f = io.StringIO()
-        final_message = None
-        last_status = None
+        yield from _run_stream({"messages": messages}, _thread_config(session_id))
+    except Exception as e:
+        yield {"type": "status", "content": f"Error: {str(e)}"}
+        yield {"type": "text", "content": f"Agent error: {str(e)}"}
 
-        def drain_stdout():
-            nonlocal last_status
-            output = f.getvalue()
-            if not output:
-                return
-            for line in output.strip().split('\n'):
-                if not line:
-                    continue
-                # Pick out Modal call IDs even if we drop the line for the user
-                call_id_match = re.search(r'job=(fc-[a-zA-Z0-9]+)', line)
-                if call_id_match:
-                    yield {"type": "call_id", "content": call_id_match.group(1)}
-                friendly = _friendly_status(line)
-                if friendly and friendly != last_status:
-                    last_status = friendly
-                    yield {"type": "status", "content": friendly}
-            f.truncate(0)
-            f.seek(0)
 
-        with contextlib.redirect_stdout(_TeeStdout(f, sys.__stdout__)):
-            for chunk in agent.stream({"messages": messages}, stream_mode="updates"):
-                # 1. Drain any stdout prints into friendly status events
-                for evt in drain_stdout():
-                    yield evt
+def resume_chat_stream(session_id, decisions):
+    """Resume a run paused at an approval gate.
 
-                # 2. Inspect the chunk for tool calls + track the latest message
-                for node_name, node_data in chunk.items():
-                    if "messages" not in node_data or not node_data["messages"]:
-                        continue
-                    last_msg = node_data["messages"][-1]
-                    final_message = last_msg  # keep updating; loop ends with the real final
-
-                    if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
-                        for tc in last_msg.tool_calls:
-                            label = _friendly_tool_label(tc["name"])
-                            status = f"{label}..."
-                            if status != last_status:
-                                last_status = status
-                                yield {"type": "status", "content": status}
-
-        # 3. Flush any trailing stdout
-        for evt in drain_stdout():
-            yield evt
-        
-        # 4. Normalize the final message content to a plain string
-        if final_message is None:
-            final_text = ""
-        else:
-            raw = final_message.content
-            if isinstance(raw, str):
-                final_text = raw
-            elif isinstance(raw, list):
-                final_text = "".join(
-                    block.get("text", "")
-                    for block in raw
-                    if isinstance(block, dict) and block.get("type") == "text"
-                )
-            else:
-                final_text = str(raw)
-        
-        yield {"type": "text", "content": final_text}
-    
+    decisions: list of decision dicts, one per interrupted tool call, e.g.
+      [{"type": "approve"}]
+      [{"type": "edit", "edited_action": {"name": tool, "args": {...}}}]
+      [{"type": "reject", "message": "make the background white"}]
+    Yields the same event types as process_chat_stream (and may pause again).
+    """
+    from langgraph.types import Command
+    try:
+        yield from _run_stream(
+            Command(resume={"decisions": decisions}),
+            _thread_config(session_id),
+        )
     except Exception as e:
         yield {"type": "status", "content": f"Error: {str(e)}"}
         yield {"type": "text", "content": f"Agent error: {str(e)}"}

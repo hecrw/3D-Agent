@@ -206,46 +206,111 @@ def api_send_message(request, session_id):
         active_session.save()
 
     def event_stream():
-        for event in process_chat_stream(user_text, history, user_image_url=current_image_url):
-            if event["type"] == "call_id":
-                yield f"data: {json.dumps({'type': 'call_id', 'modal_call_id': event['content']})}\n\n"
-            
-            elif event["type"] == "status":
-                yield f"data: {json.dumps(event)}\n\n"
-            
-            elif event["type"] == "text":
-                raw_text = event["content"]   # plain string now
-                print(f"RAW BOT TEXT: {raw_text}")
+        yield from _stream_agent_events(
+            process_chat_stream(user_text, history,
+                                user_image_url=current_image_url,
+                                session_id=session_id),
+            active_session,
+        )
 
-                bot_3d_path = ""
-                # Check for local outputs first
-                file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png|jpe?g|webp|gif))', raw_text, re.IGNORECASE)
-                if file_match:
-                    filename = file_match.group(1).lstrip('/\\')
-                    bot_3d_path = f"/media/3d_outputs/{filename}"
-                else:
-                    # Check for external URLs if no local output found (e.g. from image search)
-                    url_match = re.search(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', raw_text, re.IGNORECASE)
-                    if url_match:
-                        bot_3d_path = url_match.group(1)
+    return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
 
-                bot_text = scrub_bot_text(raw_text)
-                if bot_3d_path and "3d_outputs" in raw_text and "preview window" not in bot_text:
-                    bot_text += "\n\nYou can view it in the chat."
 
-                ChatMessage.objects.create(
-                    session=active_session,
-                    sender="assistant",
-                    text=bot_text,
-                    object_path=bot_3d_path,
-                )
+def _media_url_for_local_path(path):
+    """Map an absolute MEDIA_ROOT path (e.g. a restyled image the agent is about
+    to send to a pipeline) to its browser /media/ URL, so the approval gate can
+    show the image. Returns "" if the path isn't under MEDIA_ROOT."""
+    if not path:
+        return ""
+    try:
+        rel = os.path.relpath(os.path.abspath(path), settings.MEDIA_ROOT)
+    except ValueError:
+        return ""
+    if rel.startswith(".."):
+        return ""
+    media_url = settings.MEDIA_URL.rstrip("/") if settings.MEDIA_URL else "/media"
+    return f"{media_url}/{rel.replace(os.sep, '/')}"
 
-                final_data = {
-                    "type": "final",
-                    "text": bot_text,
-                    "3d_object_path": bot_3d_path,
-                }
-                yield f"data: {json.dumps(final_data)}\n\n"
+
+def _stream_agent_events(events, active_session):
+    """Translate the agent's event dicts into SSE frames, persisting the final
+    assistant message. Shared by the initial send and the resume endpoint."""
+    for event in events:
+        if event["type"] == "call_id":
+            yield f"data: {json.dumps({'type': 'call_id', 'modal_call_id': event['content']})}\n\n"
+
+        elif event["type"] == "status":
+            yield f"data: {json.dumps(event)}\n\n"
+
+        elif event["type"] == "interrupt":
+            # Agent paused for human approval before a 3D-generation tool. Do NOT
+            # save an assistant message — the run is suspended in the checkpointer
+            # awaiting a decision posted to the resume endpoint.
+            payload = {
+                "type": "interrupt",
+                "tool": event.get("tool", ""),
+                "label": event.get("label", ""),
+                "image_url": _media_url_for_local_path(event.get("image_path", "")),
+                "args": event.get("args", {}),
+                "allowed_decisions": event.get("allowed_decisions", []),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+
+        elif event["type"] == "text":
+            raw_text = event["content"]   # plain string now
+            print(f"RAW BOT TEXT: {raw_text}")
+
+            bot_3d_path = ""
+            # Check for local outputs first
+            file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png|jpe?g|webp|gif))', raw_text, re.IGNORECASE)
+            if file_match:
+                filename = file_match.group(1).lstrip('/\\')
+                bot_3d_path = f"/media/3d_outputs/{filename}"
+            else:
+                # Check for external URLs if no local output found (e.g. from image search)
+                url_match = re.search(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', raw_text, re.IGNORECASE)
+                if url_match:
+                    bot_3d_path = url_match.group(1)
+
+            bot_text = scrub_bot_text(raw_text)
+            if bot_3d_path and "3d_outputs" in raw_text and "preview window" not in bot_text:
+                bot_text += "\n\nYou can view it in the chat."
+
+            ChatMessage.objects.create(
+                session=active_session,
+                sender="assistant",
+                text=bot_text,
+                object_path=bot_3d_path,
+            )
+
+            final_data = {
+                "type": "final",
+                "text": bot_text,
+                "3d_object_path": bot_3d_path,
+            }
+            yield f"data: {json.dumps(final_data)}\n\n"
+
+
+def api_resume_chat(request, session_id):
+    """Resume a run paused at the human approval gate.
+
+    Body: {"decisions": [{"type": "approve"} | {"type": "reject", "message": ...}
+                          | {"type": "edit", "edited_action": {...}}]}
+    Streams the continued agent run via SSE, exactly like api_send_message.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid method"}, status=400)
+
+    from agent import resume_chat_stream
+    active_session = get_object_or_404(ChatSession, id=session_id)
+    data = json.loads(request.body)
+    decisions = data.get("decisions") or []
+
+    def event_stream():
+        yield from _stream_agent_events(
+            resume_chat_stream(session_id, decisions),
+            active_session,
+        )
 
     return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
 
