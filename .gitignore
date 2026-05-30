@@ -17,4 +17,4 @@ local_settings.py
 .vscode/
 .idea/
 .DS_Store
-Thumbs.db
+Thumbs.db.DS_Store
