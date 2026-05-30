@@ -74,7 +74,6 @@ def build_restyle_prompt(axes: "list[str] | None" = None) -> str:
     return RESTYLE_PREAMBLE + ": " + ", ".join(clauses) + "."
 
 
-# Backwards-compatible default: the full all-on prompt.
 OBJAVERSE_STYLE_PROMPT = build_restyle_prompt()
 
 GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
