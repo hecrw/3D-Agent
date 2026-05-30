@@ -29,15 +29,53 @@ PARTCRAFTER_SCENE_URL = f"https://{WORKSPACE}--partcrafter-scenegenerator-web.mo
 HUNYUAN3D2_GEN_URL = f"https://{WORKSPACE}--hunyuan3d-2-generator-web.modal.run"
 
 
-OBJAVERSE_STYLE_PROMPT = (
+# --- Objaverse restyle, decomposed into independent axes ---
+#
+# The restyle intervention is the subject of the preprocessing ablation: we
+# measure the marginal contribution of each axis to image-to-3D quality. Each
+# axis is a self-contained clause so we can toggle any subset (e.g. leave-one-out)
+# via build_restyle_prompt(). The order here is the canonical "all-on" order.
+RESTYLE_AXES: dict[str, str] = {
+    "background":      "place it on a plain neutral background with no scene context",
+    "framing":         "center the object so it is closed up, almost filling the frame",
+    "view":            ("show it from a two-quarter view, strictly from the horizontal; "
+                        "do not tilt the view of the object"),
+    "lighting":        "use even studio lighting with no shadows on the ground",
+    "isolation":       "show a single isolated object only, with no text",
+    "part_visibility": ("make the parts of the object distinctly visible, twisting the "
+                        "object slightly from its natural pose if needed"),
+}
+
+RESTYLE_PREAMBLE = (
     "Restyle this image as a single 3D asset rendered in the style of the "
-    "Objaverse dataset: one centered object on a plain neutral background, "
-    "the object should be closed up almost filling the frame"
-    "even studio lighting, no shadows on the ground, no scene context, no "
-    "text, two-quarter view, "
-    "don't tilt the view of the object show it strictly from the horizaontal view"
-    "make the parts of the object distinctly visible even if you had to twist the object a little bit from the natural"
+    "Objaverse dataset"
 )
+
+
+def build_restyle_prompt(axes: "list[str] | None" = None) -> str:
+    """Compose the restyle prompt from a subset of RESTYLE_AXES.
+
+    axes: ordered list of axis names to enable. None means all axes (the
+          canonical "all-on" condition). An empty list yields the bare
+          preamble (style transfer with no normalization axes).
+
+    Unknown axis names raise ValueError so a typo in an experiment config
+    fails loudly instead of silently dropping an axis.
+    """
+    if axes is None:
+        axes = list(RESTYLE_AXES)
+    unknown = [a for a in axes if a not in RESTYLE_AXES]
+    if unknown:
+        raise ValueError(
+            f"unknown restyle axis/axes: {unknown}; valid: {list(RESTYLE_AXES)}")
+    clauses = [RESTYLE_AXES[a] for a in axes]
+    if not clauses:
+        return RESTYLE_PREAMBLE + "."
+    return RESTYLE_PREAMBLE + ": " + ", ".join(clauses) + "."
+
+
+# Backwards-compatible default: the full all-on prompt.
+OBJAVERSE_STYLE_PROMPT = build_restyle_prompt()
 
 GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 
