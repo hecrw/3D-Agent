@@ -217,6 +217,7 @@ ALL_TOOLS = [
     tool_trellis2_texture,
     tool_partcrafter,
     tool_hunyuan3d2,
+    tool_render_mesh_views,
     tool_inspect_image,
     tool_score_alignment,
 ]
@@ -358,8 +359,9 @@ def process_chat_stream(user_input, chat_history_list, user_image_url=None):
     for msg in chat_history_list:
         role = "user" if msg["role"] == "user" else "assistant"
         content = msg["content"]
-        # If there's an image in history, we should ideally handle it too
-        # but for now let's focus on the current message.
+        # History messages carry their image two ways: the local-path tag is
+        # already baked into the text (see views.py) so tools can re-open the
+        # file, and we re-attach the image_url here so the model can see it.
         if msg.get("image"):
             content = [
                 {"type": "text", "text": content},
