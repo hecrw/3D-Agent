@@ -1,4 +1,21 @@
 filename,caption
-# Example rows — replace with your real photos + ground-truth captions.
-# example_chair.jpg,a wooden dining chair
-# example_mug.jpg,a white ceramic coffee mug
+bicycle_01.png,a rusty abandoned bicycle
+cat_01.png,a fluffy orange cat
+armchair_01.png,a plush velvet armchair
+car_01.png,a futuristic sleek electric car model
+piano_01.png,a polished mahogany grand piano
+guitar_01.png,a left-handed electric guitar painted black
+saxophone_01.png,a gleaming silver saxophone
+teapot_01.png,a ceramic teapot with floral patterns
+chandelier_01.png,a sparkling crystal chandelier
+hydrant_01.png,a bright red fire hydrant
+airplane_01.png,a crisp paper airplane
+apple_01.png,a shiny red apple
+mug_01.png,a chipped white coffee mug
+orchid_01.png,a blooming potted orchid with purple flowers
+chess_01.png,an intricately-carved wooden chess set
+smartphone_01.png,a sleek slim smartphone
+kite_01.png,a bright red kite with a frayed tail
+doll_01.png,a vintage porcelain doll with a frilly dress
+trumpet_01.png,a dented brass trumpet
+ring_01.png,a sparkling diamond ring in a velvet box
