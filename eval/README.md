@@ -6,14 +6,18 @@ PartCrafter). This is the empirical core of the paper.
 
 ## Pipeline
 
+The agent is the model under test — the eval drives it end-to-end, exactly as a user would.
+
 ```
-text prompt
-  → generate_concept_image()     Gemini generates a concept PNG
-  → restyle_to_objaverse()       Gemini restyles to Objaverse look  (skipped for "raw")
-  → backbone (Modal)             generates a .glb mesh
+text prompt + condition instruction
+  → agent (LangGraph + Claude)   autonomously calls concept gen, restyle, backbone
+  → .glb mesh
   → render_mesh_views()          8 PNGs from different camera angles
   → CLIP / Gen3DEval / ULIP-2    scores rendered views against the prompt caption
 ```
+
+The condition instruction is prepended to the prompt to control which restyle
+axes the agent uses. The agent's choice of backbone is unrestricted.
 
 ## Conditions (8)
 
@@ -35,21 +39,35 @@ Marginal effect of axis X = `score(all_on) − score(loo_X)`. Positive = axis he
 | Metric | Column | Notes |
 |--------|--------|-------|
 | CLIP | `clip_mean` | CLIP ViT-L/14 image-text cosine similarity, mean over 8 views. Always available. |
-| Gen3DEval | `gen3deval` | Claude Haiku rates rendered views 1–10 on geometry, texture, and semantic alignment. Requires `ANTHROPIC_API_KEY` in `.env`. |
-| ULIP-2 | `ulip_mean` | 3D-aware image-text similarity. Optional — see install below. |
+| Gen3DEval | `gen3deval` | The agent's Gemini model (`agent.llm`) rates rendered views 1–10 on geometry, texture, and semantic alignment. Uses the existing `GEMINI_API_KEY` — no extra account needed. |
+| ULIP-2 | `ulip_mean` | 3D-aware **point-cloud**↔text similarity (the metric Twist & Compute reports). Scored on Modal GPU — see below. |
 
-CLIP and Gen3DEval run automatically. ULIP-2 is skipped (logged as empty) if the
-library is not installed — the rest of the sweep is unaffected.
+CLIP and Gen3DEval run automatically. ULIP-2 is skipped (logged as empty) if its
+Modal app isn't deployed/reachable — the rest of the sweep is unaffected.
 
-### Installing ULIP-2 (optional)
+### ULIP-2 setup (Modal GPU)
+
+ULIP-2's colored PointBERT encoder needs CUDA ops that don't build on macOS, so
+it runs as a Modal app. The client (`eval/ulip_client.py`) samples a 10k xyz+rgb
+point cloud from each mesh locally and POSTs it to the GPU scorer.
 
 ```bash
-git clone https://github.com/salesforce/ULIP
-pip install -e ULIP/
+# deploy the scorer (from a workspace you're authed to)
+.venv/bin/modal deploy eval/ulip_modal.py
+# health check
+curl https://<workspace>--ulip2-scorer-web.modal.run/
 ```
 
-Once installed, `ulip_mean` will be populated on the next run for any rows not
-yet in the CSV.
+The endpoint URL is derived from `TRELLIS_WORKSPACE`. Once deployed, `ulip_mean`
+populates on new sweeps, or backfill existing results from their saved meshes
+(no regeneration):
+
+```bash
+.venv/bin/python eval/backfill_ulip.py eval/results_retrieved.csv
+```
+
+First build compiles `pointnet2_ops` and downloads ViT-bigG-14 (~5 GB) + the
+402 MB checkpoint — slow on the first call, fast after.
 
 ## Dataset
 
@@ -62,29 +80,52 @@ Concept images are generated automatically by `run_pilot.py` and cached in
 
 ## Cost estimate
 
-| Scale | Mesh gens | Gemini concept calls | Gemini restyle calls | Claude scoring calls |
-|-------|-----------|----------------------|----------------------|----------------------|
-| 10 prompts (pilot) | 240 | 10 (once, cached) | 210 | 240 |
-| 20 prompts (full) | 480 | 20 (once, cached) | 420 | 480 |
+| Scale | Agent runs | Gemini calls (approx) | Claude scoring calls |
+|-------|------------|----------------------|----------------------|
+| 10 prompts (pilot) | 80 | ~160 (concept + restyle) | 80 |
+| 20 prompts (full) | 160 | ~320 | 160 |
 
-Mesh settings are held cheap and constant (`--cheap` is the default) so mesh
-quality does not confound the restyle signal.
+Each agent run may call concept gen + restyle + backbone — actual Gemini call
+count depends on the agent's decisions.
+
+## Input modes
+
+| Mode | What the agent gets | Notes |
+|------|---------------------|-------|
+| `--input generated` (default) | Gemini generates a concept image from the **bare caption** (no added style/lighting/background terms) | the "generate with no extra information" baseline |
+| `--input retrieved` | a real web photo auto-fetched per prompt (Tavily) and cached | the real-photo → Objaverse domain gap the restyle targets |
+| `--input photo` | a hand-supplied real photo from `eval/dataset/images/<filename>` | same as retrieved but you curate the photos |
+
+Each mode runs the full 8-condition restyle ablation, which gives the three
+input strategies under comparison:
+
+| Strategy | How to read it |
+|----------|----------------|
+| 1. Generate (no extra info) | `--input generated`, `raw` condition |
+| 2. Retrieve | `--input retrieved`, `raw` condition |
+| 3. Retrieve + restyle | `--input retrieved`, `all_on` (+ `loo_*` for the per-axis ablation) |
+
+The generated pilot (`results_pilot.csv`) showed the per-axis effect is ~zero
+because the concept images were already studio-clean. The **retrieved** arm is
+where the restyle should actually matter. Each mode caches/tags its media
+separately, so the arms never collide.
 
 ## Run
 
 ```bash
-# pilot: first 10 prompts, all backbones
+# generated-input pilot: first 10 prompts
 .venv/bin/python eval/run_pilot.py --limit 10 --out eval/results_pilot.csv
 
-# single backbone while iterating
-.venv/bin/python eval/run_pilot.py --limit 10 --backbones trellis2
+# real-photo arm (needs photos in eval/dataset/images/) — SEPARATE output file
+.venv/bin/python eval/run_pilot.py --input photo --out eval/results_photos.csv
 
-# resume: rows already in the CSV are skipped automatically
+# resume: ok rows in the CSV are skipped automatically
 .venv/bin/python eval/run_pilot.py --limit 10 --out eval/results_pilot.csv
 ```
 
-Requires Modal apps deployed and `.env` populated with `GEMINI_API_KEY`,
-`ANTHROPIC_API_KEY`, and `TRELLIS_WORKSPACE` (see top-level README).
+Requires Modal apps deployed and `.env` populated with `GEMINI_API_KEY` and
+`TRELLIS_WORKSPACE` (see top-level README). All three metrics that run by
+default (CLIP, Gen3DEval via Gemini) need no additional keys.
 
 ## Analyze
 
@@ -92,8 +133,23 @@ Requires Modal apps deployed and `.env` populated with `GEMINI_API_KEY`,
 .venv/bin/python eval/analyze.py eval/results_pilot.csv
 ```
 
-Prints three tables (one per metric): absolute mean by condition × backbone,
-then the per-axis marginal effect with paired standard deviation and n.
+Prints three tables (one per metric): absolute mean by condition, then the
+per-axis marginal effect with paired standard deviation and n.
+
+## Sanity-check which axes are live
+
+Before trusting (or spending compute on) the per-axis numbers, eyeball whether
+each axis actually changes the restyled input the backbone receives:
+
+```bash
+.venv/bin/python eval/contact_sheet.py eval/results_pilot.csv
+open eval/contact_sheet.html
+```
+
+For each prompt it lays out one row per condition showing the **restyled input**
+plus the front mesh view. If `all_on` and a `loo_*` row look identical, that
+axis isn't changing the input — no metric can detect an effect there, and the
+fix is a stronger restyle clause, not more samples.
 
 ## Output columns
 

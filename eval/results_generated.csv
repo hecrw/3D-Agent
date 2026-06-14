@@ -1,0 +1,3 @@
+prompt,condition,clip_mean,clip_accept,worst_view,per_view,gen3deval,ulip_mean,restyled_path,mesh_path,status,error,seconds
+a rusty abandoned bicycle,raw,0.2100,False,top,"{""front"": 0.23, ""back"": 0.25, ""left"": 0.199, ""right"": 0.2, ""top"": 0.184, ""bottom"": 0.206}",8.0,,,/Users/hecrlyla/Documents/Coding/3D-Agent/media/3d_outputs/trellis2_bicycle_01__raw_1781270822252.glb,ok,,22.7
+a rusty abandoned bicycle,all_on,0.2000,False,top,"{""front"": 0.21, ""back"": 0.222, ""left"": 0.208, ""right"": 0.202, ""top"": 0.153, ""bottom"": 0.183}",8.0,,/Users/hecrlyla/Documents/Coding/3D-Agent/media/3d_outputs/objaverse_bicycle_01__all_on_1781265767262.png,/Users/hecrlyla/Documents/Coding/3D-Agent/media/3d_outputs/trellis2_bicycle_01__all_on_1781265791597.glb,ok,,7.8
