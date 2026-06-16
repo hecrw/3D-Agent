@@ -409,6 +409,15 @@ agent = create_agent(
     CRITICAL: Never use 'input_file_0.png' or any other generated path.
     Use the EXACT absolute path provided in the [Uploaded Image Local Path: ...] tag for any tool that requires an 'image_path'.
     If you see an image but no local path is provided in the text, ask the user for clarification.
+
+    UPLOADED 3D ASSET: if you see an [Uploaded 3D Asset Local Path: <path>] tag, the
+    user uploaded a FINISHED 3D mesh (.glb). It is already 3D — do NOT restyle it,
+    do NOT run it through a 3D-generation tool. Pass its path directly to the mesh
+    tools: tool_compose_scene (to place other assets onto/next to it),
+    tool_render_mesh_views (to show it), tool_trellis2_texture (to re-texture it),
+    or tool_score_alignment. For "put the cat on this couch", call tool_compose_scene
+    with the uploaded couch path plus the cat's [Previously generated asset: ...] path.
+
     Make conversation with the user, but if his request can be
     done using the tools you have, use the tools to fulfill his request.
 
@@ -528,6 +537,12 @@ def _pending_interrupt(config):
     }
 
 
+# A 3D-generation/compose tool returns a string like "3D model saved: <abs>.glb".
+# We harvest the mesh path straight from tool output so the UI can render the
+# viewer even though the agent is told NOT to mention file paths in its reply.
+_ARTIFACT_RE = re.compile(r'[^\s\'"]*3d_outputs[/\\][^\s\'"]+\.glb', re.IGNORECASE)
+
+
 def _run_stream(stream_input, config):
     """Shared driver for both a fresh run and a resume. Yields the same event
     dicts as process_chat_stream and ends with EITHER an `interrupt` event (the
@@ -535,6 +550,7 @@ def _run_stream(stream_input, config):
     f = io.StringIO()
     final_message = None
     last_status = None
+    artifact_path = ""  # newest .glb produced by a tool during this run
 
     def drain_stdout():
         nonlocal last_status
@@ -570,6 +586,14 @@ def _run_stream(stream_input, config):
                 last_msg = node_data["messages"][-1]
                 final_message = last_msg  # keep updating; loop ends with the real final
 
+                # Harvest the newest mesh path from any tool result in this chunk.
+                for msg in node_data["messages"]:
+                    content = getattr(msg, "content", None)
+                    if isinstance(content, str):
+                        m = _ARTIFACT_RE.search(content)
+                        if m:
+                            artifact_path = m.group(0)
+
                 if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
                     for tc in last_msg.tool_calls:
                         label = _friendly_tool_label(tc["name"])
@@ -589,8 +613,9 @@ def _run_stream(stream_input, config):
         yield interrupt
         return
 
-    # 5. Otherwise the run finished: emit the normalized final text.
-    yield {"type": "text", "content": _normalize_text(final_message)}
+    # 5. Otherwise the run finished: emit the normalized final text plus the
+    #    mesh path harvested from tool output (the reply text no longer carries it).
+    yield {"type": "text", "content": _normalize_text(final_message), "artifact": artifact_path}
 
 
 def process_chat_stream(user_input, chat_history_list, user_image_url=None,

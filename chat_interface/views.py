@@ -180,9 +180,17 @@ def api_send_message(request, session_id):
     if request.method != "POST":
         return JsonResponse({"error": "Invalid method"}, status=400)
     
-    data = json.loads(request.body)
-    user_text = data.get('text')
-    user_image_b64 = data.get('image') # base64 string
+    # Two transports: JSON (text + base64 image, the default) or multipart
+    # (text + an uploaded 3D mesh file, which is too big to base64 in JSON).
+    mesh_file = None
+    if request.content_type and request.content_type.startswith("multipart"):
+        user_text = request.POST.get("text", "")
+        user_image_b64 = None
+        mesh_file = request.FILES.get("mesh")
+    else:
+        data = json.loads(request.body)
+        user_text = data.get('text')
+        user_image_b64 = data.get('image')  # base64 string
     active_session = get_object_or_404(ChatSession, id=session_id)
 
     last_msg = active_session.messages.all().order_by('created_at').last()
@@ -190,18 +198,19 @@ def api_send_message(request, session_id):
     if not (last_msg and last_msg.sender == "user" and last_msg.text == user_text):
         import base64
         from django.core.files.base import ContentFile
-        
+
         attachment = None
         if user_image_b64 and "," in user_image_b64:
             format, imgstr = user_image_b64.split(';base64,')
             ext = format.split('/')[-1]
             attachment = ContentFile(base64.b64decode(imgstr), name=f"upload.{ext}")
-            
+
         current_user_msg = ChatMessage.objects.create(
-            session=active_session, 
-            sender="user", 
+            session=active_session,
+            sender="user",
             text=user_text,
-            attachment=attachment
+            attachment=attachment,
+            mesh_upload=mesh_file,
         )
 
     # Fetch history EXCLUDING the message we are currently processing (the last one)
@@ -215,6 +224,8 @@ def api_send_message(request, session_id):
         content = msg.text
         if msg.attachment:
             content += f"\n\n[Uploaded Image Local Path: {msg.attachment.path}]"
+        if msg.mesh_upload:
+            content += f"\n\n[Uploaded 3D Asset Local Path: {msg.mesh_upload.path}]"
         # Let the agent reference assets it produced earlier ("the last one").
         if msg.sender == "assistant" and msg.object_path:
             asset_path = _local_path_for_object(msg.object_path)
@@ -233,6 +244,11 @@ def api_send_message(request, session_id):
         current_image_url = request.build_absolute_uri(current_user_msg.attachment.url)
         # We append the local path to the prompt so the agent knows what path to pass to tools
         user_text += f"\n\n[Uploaded Image Local Path: {current_user_msg.attachment.path}]"
+
+    # Hand the agent the absolute path of an uploaded 3D mesh so it can feed it
+    # straight to the mesh tools (compose_scene, render, texture).
+    if current_user_msg and current_user_msg.mesh_upload:
+        user_text += f"\n\n[Uploaded 3D Asset Local Path: {current_user_msg.mesh_upload.path}]"
 
     if active_session.title == "New Chat" or active_session.title == user_text[:30]:
         active_session.title = generate_chat_title(user_text)
@@ -300,8 +316,10 @@ def _stream_agent_events(events, active_session):
             print(f"RAW BOT TEXT: {raw_text}")
 
             bot_3d_path = ""
-            # Check for local outputs first
-            file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png|jpe?g|webp|gif))', raw_text, re.IGNORECASE)
+            # Prefer the mesh path harvested from tool output (the reply text no
+            # longer contains paths); fall back to scraping the text.
+            path_source = event.get("artifact") or raw_text
+            file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png|jpe?g|webp|gif))', path_source, re.IGNORECASE)
             if file_match:
                 filename = file_match.group(1).lstrip('/\\')
                 bot_3d_path = f"/media/3d_outputs/{filename}"
@@ -312,7 +330,7 @@ def _stream_agent_events(events, active_session):
                     bot_3d_path = url_match.group(1)
 
             bot_text = scrub_bot_text(raw_text)
-            if bot_3d_path and "3d_outputs" in raw_text and "preview window" not in bot_text:
+            if bot_3d_path and "3d_outputs" in path_source and "preview window" not in bot_text:
                 bot_text += "\n\nYou can view it in the chat."
 
             ChatMessage.objects.create(
@@ -370,11 +388,13 @@ def api_reconnect(request, session_id):
 
     handle = get_run(session_id)
     if handle is not None:
+        print(f"[reconnect {session_id}] -> live run (streaming handle)")
         return StreamingHttpResponse(handle.subscribe(), content_type='text/event-stream')
 
     from agent import peek_interrupt
     gate = peek_interrupt(session_id)
     if gate is not None:
+        print(f"[reconnect {session_id}] -> re-emitting approval gate")
         def gate_frame():
             payload = {
                 "type": "interrupt",
@@ -389,6 +409,7 @@ def api_reconnect(request, session_id):
 
     last = active_session.messages.order_by("created_at").last()
     if last is not None and last.sender == "assistant":
+        print(f"[reconnect {session_id}] -> replaying saved final message")
         def final_frame():
             payload = {
                 "type": "final",
@@ -397,6 +418,24 @@ def api_reconnect(request, session_id):
             }
             yield f"data: {json.dumps(payload)}\n\n"
         return StreamingHttpResponse(final_frame(), content_type='text/event-stream')
+
+    # No live run, no gate, last message is the user's prompt: a generation was
+    # in flight but its background thread is gone (almost always the dev server
+    # auto-reloaded on a file save, which kills daemon threads + the in-memory
+    # registry). Surface it instead of vanishing silently.
+    from agent import peek_interrupt  # noqa: F811  (already imported above)
+    state_next = None
+    try:
+        import agent as _agent
+        state_next = _agent.agent.get_state(_agent._thread_config(session_id)).next
+    except Exception:
+        pass
+    print(f"[reconnect {session_id}] -> no live run, no gate (orphaned? next={state_next})")
+    if state_next:  # a checkpoint exists mid-run -> it was interrupted
+        def orphan_frame():
+            yield f"data: {json.dumps({'type': 'status', 'content': 'The previous generation was interrupted — please resend.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'final', 'text': 'That generation was interrupted (the server restarted). Please send the request again.', '3d_object_path': ''})}\n\n"
+        return StreamingHttpResponse(orphan_frame(), content_type='text/event-stream')
 
     return JsonResponse({"active": False})
 

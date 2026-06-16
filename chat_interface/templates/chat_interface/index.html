@@ -339,9 +339,14 @@
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                             <span>Upload Image</span>
                         </div>
+                        <div class="upload-menu-item" onclick="document.getElementById('mesh-upload').click()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                            <span>Upload 3D model</span>
+                        </div>
                     </div>
-                    
+
                     <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                    <input type="file" id="mesh-upload" accept=".glb,.gltf,.obj,.ply,.stl" style="display: none;">
                     
                     <textarea id="user-input" rows="1" placeholder="What should we create next?" autocomplete="off"></textarea>
                     <button id="send-btn" class="send-action">
@@ -478,6 +483,8 @@
         let isGenerating = false;
         let abortController = null;
         let pendingImageB64 = null;
+        let pendingMeshFile = null;
+        const meshInput = document.getElementById('mesh-upload');
         let currentModalCallId = null;
 
         function toggleGenerating(state) {
@@ -564,11 +571,29 @@
             });
         }
 
+        // Handle 3D mesh selection (kept as a File for multipart upload).
+        if (meshInput) {
+            meshInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                pendingMeshFile = file;
+                previewContainer.innerHTML = `
+                    <div class="preview-item" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--msg-user); border-radius:10px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        <span style="font-size:13px;">${file.name}</span>
+                        <button class="remove-preview" onclick="clearPreview()">&times;</button>
+                    </div>`;
+                previewContainer.style.display = 'flex';
+            });
+        }
+
         function clearPreview() {
             pendingImageB64 = null;
+            pendingMeshFile = null;
             previewContainer.innerHTML = '';
             previewContainer.style.display = 'none';
             fileInput.value = '';
+            if (meshInput) meshInput.value = '';
         }
 
         function appendMessage(sender, text, objectPath = null, imageUrl = null) {
@@ -733,15 +758,21 @@
             }
         }
 
-        async function fetchAiResponse(text, loadingId, imageData = null) {
+        async function fetchAiResponse(text, loadingId, imageData = null, meshFile = null) {
             abortController = new AbortController(); toggleGenerating(true);
             try {
-                const response = await fetch(`/api/chat/${activeSessionId}/message/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                    body: JSON.stringify({ text: text, image: imageData }),
-                    signal: abortController.signal
-                });
+                // A mesh is too large to base64 in JSON, so when one is attached we
+                // send the whole message as multipart instead.
+                let fetchOpts;
+                if (meshFile) {
+                    const fd = new FormData();
+                    fd.append('text', text);
+                    fd.append('mesh', meshFile);
+                    fetchOpts = { method: 'POST', headers: { 'X-CSRFToken': csrfToken }, body: fd, signal: abortController.signal };
+                } else {
+                    fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ text: text, image: imageData }), signal: abortController.signal };
+                }
+                const response = await fetch(`/api/chat/${activeSessionId}/message/`, fetchOpts);
                 const reader = response.body.getReader(); const decoder = new TextDecoder();
                 const loadingEl = document.getElementById(loadingId);
                 const statusText = loadingEl ? loadingEl.querySelector('.status-text') : null;
@@ -774,7 +805,8 @@
         async function handleSend() {
             if (isGenerating) return; const text = userInput.value.trim(); if (!text || !activeSessionId) return;
             const imageData = pendingImageB64;
-            appendMessage('user', text, null, imageData);
+            const meshFile = pendingMeshFile;
+            appendMessage('user', meshFile ? `${text}  📦 ${meshFile.name}` : text, null, imageData);
             userInput.value = '';
             userInput.style.height = 'auto';
             clearPreview();
@@ -783,7 +815,7 @@
             const loadingBox = document.createElement('div'); loadingBox.id = loadingId; loadingBox.className = 'message-box ai-msg';
             loadingBox.innerHTML = `<div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Assistant</div></div><div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; margin-top: 8px;"><div class="spinner"></div> <span class="status-text">Processing...</span></div>`;
             chatContainer.appendChild(loadingBox); chatContainer.scrollTop = chatContainer.scrollHeight;
-            await fetchAiResponse(text, loadingId, imageData);
+            await fetchAiResponse(text, loadingId, imageData, meshFile);
         }
 
         async function handleStop() {
