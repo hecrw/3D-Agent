@@ -151,6 +151,33 @@ def restyle_to_objaverse(image_path: str | Path,
     return path
 
 
+def edit_image(image_path: str | Path,
+               instruction: str,
+               out_path: str | Path | None = None) -> str:
+    """Edit an image per a natural-language instruction (Gemini image editing).
+
+    Unlike restyle (which normalizes to Objaverse style), this applies an
+    arbitrary targeted change the user asked for, e.g. "make the background
+    white", "remove the text", "make it look more realistic". Returns the saved
+    PNG path.
+    """
+    image_path = str(image_path)
+    out_path = out_path or f"edited_{int(time.time())}.png"
+    print(f"[gemini] edit: {image_path} :: {instruction!r}")
+    src = _gemini().files.upload(file=image_path)
+    resp = _gemini().models.generate_content(
+        model=GEMINI_IMAGE_MODEL,
+        contents=[src, instruction],
+        config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+    )
+    data = _extract_image_bytes(resp)
+    if not data:
+        raise RuntimeError("Gemini returned no image for edit")
+    path = _save_png(data, out_path)
+    print(f"[gemini] saved {path}")
+    return path
+
+
 TAVILY_URL = "https://api.tavily.com/search"
 
 
@@ -628,7 +655,14 @@ def render_mesh_views(mesh_path: str | Path,
                       views: str | list[str] = "default",
                       image_size: int = 512,
                       distance: float = 3.0) -> dict[str, str]:
-    """Render named camera views of a mesh as PNGs.
+    """Render named camera views of a mesh as PNGs (thread-safe wrapper).
+
+    pyrender's pyglet backend must own the *main* thread on macOS. The agent
+    calls this from a Django/LangGraph worker thread, where pyglet's attempt to
+    touch the AppKit main menu crashes the whole process. To stay safe from any
+    thread we run the actual render in a short-lived subprocess (which owns its
+    own main thread) when we're not already on the main thread; on the main
+    thread we render in-process with no overhead.
 
     Args:
         mesh_path:  any format trimesh can load (.glb/.obj/.ply/.stl).
@@ -642,6 +676,44 @@ def render_mesh_views(mesh_path: str | Path,
 
     Returns: dict mapping view name -> saved PNG path.
     """
+    import threading
+
+    if threading.current_thread() is threading.main_thread():
+        return _render_mesh_views_local(mesh_path, out_dir, views, image_size, distance)
+
+    import json
+    import subprocess
+    import sys
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), "--render-views",
+         str(mesh_path), str(out_dir), json.dumps(views),
+         str(image_size), str(distance)],
+        capture_output=True, text=True, timeout=600,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"render subprocess failed (exit {proc.returncode}):\n"
+            f"{proc.stderr[-2000:]}")
+    # The render impl logs "[views] ..." lines; the result dict is the final
+    # non-empty stdout line, emitted as JSON by the __main__ entrypoint below.
+    lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+    try:
+        return json.loads(lines[-1])
+    except (IndexError, json.JSONDecodeError) as e:
+        raise RuntimeError(
+            f"render subprocess produced no result ({e}):\n"
+            f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr[-2000:]}")
+
+
+def _render_mesh_views_local(mesh_path: str | Path,
+                             out_dir: str | Path,
+                             views: str | list[str] = "default",
+                             image_size: int = 512,
+                             distance: float = 3.0) -> dict[str, str]:
+    """In-process render. ONLY safe on the main thread (see render_mesh_views)."""
     # Lazy imports — keeps tools.py importable on machines without GL.
     import numpy as np
     import pyrender
@@ -790,3 +862,22 @@ def check_alignment(
         worst_view=worst_name,
         per_view=per_view,
     )
+
+
+if __name__ == "__main__":
+    # Subprocess entrypoint used by render_mesh_views() when it is called off the
+    # main thread (see that function). Renders on this fresh process's main
+    # thread and prints the {view: path} dict as JSON on the final stdout line.
+    import sys as _sys
+
+    if len(_sys.argv) >= 2 and _sys.argv[1] == "--render-views":
+        import json as _json
+
+        _mesh_path = _sys.argv[2]
+        _out_dir = _sys.argv[3]
+        _views = _json.loads(_sys.argv[4]) if len(_sys.argv) > 4 else "default"
+        _image_size = int(_sys.argv[5]) if len(_sys.argv) > 5 else 512
+        _distance = float(_sys.argv[6]) if len(_sys.argv) > 6 else 3.0
+        _paths = _render_mesh_views_local(
+            _mesh_path, _out_dir, _views, _image_size, _distance)
+        print(_json.dumps(_paths))

@@ -251,13 +251,13 @@
             <div class="message-box">
                 {% if msg.sender == 'user' %}
                     <div class="user-msg">
-                        <div class="user-content markdown-content">
+                        <div class="user-content">
                             {% if msg.attachment %}
                                 <div style="margin-bottom: 12px; max-width: 240px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
                                     <img src="{{ msg.attachment.url }}" style="width: 100%; height: auto; display: block;">
                                 </div>
                             {% endif %}
-                            {{ msg.text }}
+                            <div class="markdown-content">{{ msg.text }}</div>
                         </div>
                     </div>
 {% else %}
@@ -577,7 +577,7 @@
             box.className = 'message-box';
             if (sender === 'user') {
                 let imgHtml = imageUrl ? `<div style="margin-bottom: 12px; max-width: 240px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);"><img src="${imageUrl}" style="width: 100%; height: auto; display: block;"></div>` : '';
-                box.innerHTML = `<div class="user-msg"><div class="user-content markdown-content">${imgHtml}${text}</div></div>`;
+                box.innerHTML = `<div class="user-msg"><div class="user-content">${imgHtml}<div class="markdown-content">${text}</div></div></div>`;
             } else {
                 let assetHtml = '';
                 if (objectPath) {
@@ -658,6 +658,31 @@
                     resumeAiResponse([decision]);
                 });
             });
+        }
+
+        // On page load, re-attach to a generation that was already running for
+        // this chat (e.g. the user refreshed mid-generation). The server tells us
+        // whether anything is in flight; if not it returns JSON and we do nothing.
+        async function reconnectIfPending() {
+            if (!activeSessionId) return;
+            const lastUser = document.querySelector('.message-box:last-child .user-content');
+            if (!lastUser) return; // last message is already an assistant reply
+            let response;
+            try {
+                response = await fetch(`/api/chat/${activeSessionId}/reconnect/`);
+            } catch (e) { return; }
+            const ctype = response.headers.get('content-type') || '';
+            if (!ctype.includes('text/event-stream')) return; // {active:false}
+
+            toggleGenerating(true);
+            const loadingId = 'loading-' + Date.now();
+            const loadingBox = document.createElement('div');
+            loadingBox.id = loadingId; loadingBox.className = 'message-box ai-msg';
+            loadingBox.innerHTML = `<div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Assistant</div></div><div style="display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:13px; margin-top:8px;"><div class="spinner"></div> <span class="status-text">Reconnecting…</span></div>`;
+            chatContainer.appendChild(loadingBox); chatContainer.scrollTop = chatContainer.scrollHeight;
+            try { await consumeAgentStream(response, loadingId); }
+            catch (e) { const el = document.getElementById(loadingId); if (el) el.remove(); }
+            finally { toggleGenerating(false); }
         }
 
         async function resumeAiResponse(decisions) {
@@ -816,6 +841,9 @@
             // Auto-start generation if redirected from landing page
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('auto_start') === 'true' && activeSessionId) {
+                // Strip auto_start from the URL immediately so a refresh during
+                // generation does NOT re-fire and resubmit the same prompt.
+                window.history.replaceState({}, '', window.location.pathname);
                 const lastMsgEl = document.querySelector('.message-box:last-child .user-content');
                 if (lastMsgEl) {
                     const text = lastMsgEl.innerText.trim();
@@ -833,6 +861,10 @@
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                     await fetchAiResponse(text, loadingId);
                 }
+            } else {
+                // Not a fresh auto-start: if a generation is already running for
+                // this chat (refresh mid-generation), re-attach to it.
+                reconnectIfPending();
             }
         });
     </script>

@@ -6,6 +6,7 @@ from langchain_core.tools import tool
 from tools import (
     generate_concept_image,
     restyle_to_objaverse,
+    edit_image,
     trellis2,
     trellis2_texture,
     partcrafter,
@@ -102,15 +103,31 @@ def tool_restyle_to_objaverse(image_path: str) -> str:
     return f"Restyled image saved: {path}"
 
 @tool
+def tool_edit_image(image_path: str, instruction: str) -> str:
+    """Apply a targeted, natural-language edit to an existing image and return the
+    NEW image path. Examples of instructions: 'make the background white', 'remove
+    the text', 'make it look more realistic', 'show the handle'. Use this to act on
+    human feedback at the approval gate (a rejection) instead of regenerating from
+    scratch — then send the edited image to the 3D tool for re-approval."""
+    out = _stamp("edited", "png")
+    path = edit_image(image_path=image_path, instruction=instruction, out_path=out)
+    return f"Edited image saved: {path}"
+
+@tool
 def tool_trellis2(image_path: str) -> str:
-    """Run the TRELLIS pipeline: convert a clean image into a textured 3D GLB file."""
+    """Run the TRELLIS pipeline: convert a clean image into a 3D GLB file that is
+    ALREADY FULLY TEXTURED. The returned GLB is the finished asset — do NOT call
+    tool_trellis2_texture on it."""
     out = _stamp("trellis2", "glb")
     path = trellis2(image_path=image_path, out_path=out)
     return f"3D model saved: {path}"
 
 @tool
 def tool_trellis2_texture(image_path: str, mesh_path: str) -> str:
-    """Re-texture an existing mesh using TRELLIS."""
+    """Re-texture an EXISTING, UNTEXTURED mesh (e.g. a bare .glb the user supplied
+    or a geometry-only output). Do NOT use this on a mesh produced by tool_trellis2
+    or tool_hunyuan3d2 — those are already textured and re-texturing wastes a GPU
+    job and can fail."""
     out = _stamp("trellisTex", "glb")
     path = trellis2_texture(image_path=image_path, mesh_path=mesh_path, out_path=out)
     return f"Textured model saved: {path}"
@@ -213,6 +230,7 @@ ALL_TOOLS = [
     tool_download_image,
     tool_generate_concept_image,
     tool_restyle_to_objaverse,
+    tool_edit_image,
     tool_trellis2,
     tool_trellis2_texture,
     tool_partcrafter,
@@ -231,6 +249,7 @@ TOOL_LABELS = {
     "tool_download_image": "Downloading image",
     "tool_generate_concept_image": "Generating concept image",
     "tool_restyle_to_objaverse": "Restyling to Objaverse",
+    "tool_edit_image": "Editing image",
     "tool_trellis2": "Generating 3D model",
     "tool_trellis2_texture": "Re-texturing model",
     "tool_partcrafter": "Decomposing into parts",
@@ -327,12 +346,11 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 # the generation tools surfaces the "does this image work?" decision: the agent
 # pauses showing the image it is about to send to the pipeline, and the human
 # can approve it, or reject to make the agent regenerate the image.
-# Each gated tool allows three decisions: approve (run as-is), edit (tweak the
-# tool args, e.g. swap the image or num_parts, then run), and reject (the human
+# Each gated tool allows two decisions: approve (run as-is) and reject (the human
 # types feedback which the agent sees as an error and uses to regenerate). We
-# deliberately omit "respond" — a human cannot fabricate a GLB on the tool's
-# behalf.
-_GATE = {"allowed_decisions": ["approve", "edit", "reject"]}
+# omit "edit" (fiddling with raw tool args is not a useful human action here) and
+# "respond" (a human cannot fabricate a GLB on the tool's behalf).
+_GATE = {"allowed_decisions": ["approve", "reject"]}
 GATED_TOOLS = {
     "tool_trellis2": _GATE,
     "tool_trellis2_texture": _GATE,
@@ -369,6 +387,47 @@ agent = create_agent(
     If you see an image but no local path is provided in the text, ask the user for clarification.
     Make conversation with the user, but if his request can be
     done using the tools you have, use the tools to fulfill his request.
+
+    PIPELINE ORDER (always follow this): (1) obtain an image — generate one with
+    tool_generate_concept_image, or search+download a real photo, or use the
+    user's uploaded image; (2) ALWAYS pass that image through
+    tool_restyle_to_objaverse to normalize it into the clean Objaverse asset
+    style; (3) send the RESTYLED image to a 3D-generation tool (tool_trellis2 /
+    tool_hunyuan3d2 / tool_partcrafter). The restyle in step 2 is MANDATORY for
+    EVERY image — generated, retrieved, user-uploaded, or edited — because the 3D
+    backbones are trained on Objaverse-style renders and fail on raw photos. Never
+    send a raw photo, a raw generated image, or a freshly edited image straight to
+    a 3D tool without restyling it first. The only image you ever hand to a 3D tool
+    is the output path of tool_restyle_to_objaverse.
+
+    HANDLING A REJECTED IMAGE: every 3D-generation tool pauses for human approval
+    of the image first. If the human REJECTS, you will receive that tool call back
+    as an error whose text is the human's feedback about the IMAGE (e.g. "make him
+    more realistic", "white background", "remove the text"). Do NOT re-call the
+    same 3D tool with the same image. Instead FIRST produce a NEW image that
+    addresses the feedback — call tool_edit_image(image_path, instruction) to edit
+    the current image, or tool_generate_concept_image to remake it — THEN run it
+    through tool_restyle_to_objaverse (step 2 of the pipeline is still mandatory),
+    and only THEN call the 3D tool again with the restyled image path. The gate
+    will re-open showing the new image. Never send the rejected image back
+    unchanged, and never skip the restyle.
+
+    Earlier assistant turns in the history may carry a
+    [Previously generated asset: <absolute path>] tag — that is the local file of
+    a 3D mesh (.glb) or image you produced before. When the user refers to a past
+    result ("the last one", "that mesh", "make it bigger", "now texture it",
+    "render the previous object"), reuse the most recent such path as the
+    mesh_path / image_path argument instead of generating from scratch. If several
+    are present and it is ambiguous, prefer the most recent one. These bracketed
+    tags are internal context for you only — NEVER repeat them or any file path in
+    your reply to the user. Refer to assets in plain language ("your previous
+    model", "the cat you generated").
+
+    IMPORTANT: tool_trellis2 and tool_hunyuan3d2 already return a FULLY TEXTURED
+    GLB. Once one of them produces a mesh, that mesh is the finished asset: return
+    it to the user and STOP. Never call tool_trellis2_texture on a TRELLIS or
+    Hunyuan output — it is already textured. Only use tool_trellis2_texture on a
+    mesh that is genuinely untextured (e.g. a bare geometry file the user gave you).
 
     You can also act as a vision model. After any tool that produces or
     fetches an image (concept generation, Objaverse restyle, image search +
@@ -570,3 +629,13 @@ def resume_chat_stream(session_id, decisions):
     except Exception as e:
         yield {"type": "status", "content": f"Error: {str(e)}"}
         yield {"type": "text", "content": f"Agent error: {str(e)}"}
+
+
+def peek_interrupt(session_id):
+    """Return the approval-gate dict if this session's run is currently paused at
+    the human-approval gate, else None.
+
+    Unlike process/resume, this does NOT advance the run — it just reads the
+    persisted checkpoint. Used to re-render the gate after a browser refresh.
+    """
+    return _pending_interrupt(_thread_config(session_id))

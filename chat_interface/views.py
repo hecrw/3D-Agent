@@ -8,8 +8,30 @@ import os
 import re
 from urllib.parse import urlparse, unquote
 from agent import generate_chat_title, process_chat_stream
+from .runs import start_run, get_run
 # NEW: Import Modal to handle cancellation
 import modal
+
+
+def _local_path_for_object(object_path):
+    """Resolve a stored object_path (a /media/... URL) to an absolute local file
+    path on disk, or None if it is an external URL or no longer present. Used to
+    hand the agent the file of a previously generated asset so the user can refer
+    back to it ("texture the last one")."""
+    if not object_path:
+        return None
+    parsed = urlparse(object_path)
+    if parsed.scheme in ("http", "https"):
+        return None
+    path = unquote(parsed.path or object_path)
+    media_url = settings.MEDIA_URL.rstrip("/") if settings.MEDIA_URL else ""
+    if media_url and path.startswith(media_url + "/"):
+        full = os.path.join(settings.MEDIA_ROOT, path[len(media_url) + 1:])
+    elif os.path.isabs(path):
+        full = path
+    else:
+        full = os.path.join(settings.MEDIA_ROOT, path)
+    return full if os.path.isfile(full) else None
 
 
 def _delete_local_asset(object_path):
@@ -53,6 +75,12 @@ def scrub_bot_text(raw_text):
             raw_text = json_text_match.group(1).encode().decode('unicode_escape')
 
     # 2. Clean up paths and internal info
+    # Strip internal context tags the model may have echoed back into its reply
+    # (e.g. "[Previously generated asset: /…]", "[Uploaded Image Local Path: /…]"),
+    # including any surrounding markdown asterisks and a possibly-truncated bracket.
+    raw_text = re.sub(
+        r'\*{0,2}\[(?:Previously generated asset|Uploaded Image Local Path):[^\]]*\]?\*{0,2}',
+        '', raw_text)
     # We NO LONGER remove markdown links [text](url)
     clean_text = re.sub(r'[^\s]*3d_outputs[^\s]*', '', raw_text)
     clean_text = re.sub(r'[^.!?\n]*(?:/Users/|/home/|/var/|/media/|[a-zA-Z]:\\)[^.!?\n]*[.!?]?', '', clean_text)
@@ -187,7 +215,12 @@ def api_send_message(request, session_id):
         content = msg.text
         if msg.attachment:
             content += f"\n\n[Uploaded Image Local Path: {msg.attachment.path}]"
-        
+        # Let the agent reference assets it produced earlier ("the last one").
+        if msg.sender == "assistant" and msg.object_path:
+            asset_path = _local_path_for_object(msg.object_path)
+            if asset_path:
+                content += f"\n\n[Previously generated asset: {asset_path}]"
+
         item = {"role": msg.sender, "content": content}
         if msg.attachment:
             # Provide absolute URL for the agent (LangChain/Gemini)
@@ -205,15 +238,21 @@ def api_send_message(request, session_id):
         active_session.title = generate_chat_title(user_text)
         active_session.save()
 
-    def event_stream():
-        yield from _stream_agent_events(
+    # Run the generation in a background thread (owned by start_run) so it
+    # survives a browser refresh: the worker keeps going and persists the reply
+    # even if this HTTP response disconnects. We subscribe this request to the
+    # run's event stream. If a run is already active for this session, start_run
+    # returns it instead of starting a second one (dedupes double submits).
+    handle = start_run(
+        session_id,
+        lambda: _stream_agent_events(
             process_chat_stream(user_text, history,
                                 user_image_url=current_image_url,
                                 session_id=session_id),
             active_session,
-        )
-
-    return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+        ),
+    )
+    return StreamingHttpResponse(handle.subscribe(), content_type='text/event-stream')
 
 
 def _media_url_for_local_path(path):
@@ -306,13 +345,61 @@ def api_resume_chat(request, session_id):
     data = json.loads(request.body)
     decisions = data.get("decisions") or []
 
-    def event_stream():
-        yield from _stream_agent_events(
+    handle = start_run(
+        session_id,
+        lambda: _stream_agent_events(
             resume_chat_stream(session_id, decisions),
             active_session,
-        )
+        ),
+    )
+    return StreamingHttpResponse(handle.subscribe(), content_type='text/event-stream')
 
-    return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+
+def api_reconnect(request, session_id):
+    """Re-attach to a generation already in flight for this session, so a browser
+    refresh does not lose (or resubmit) it. Three cases:
+
+      1. A run is still active  -> stream it (replays everything, then tails).
+      2. The run paused at the approval gate before we disconnected -> re-emit
+         the gate so the user can still approve/reject.
+      3. The run finished while we were away -> emit its saved final message.
+
+    Otherwise returns {"active": false} and the client does nothing.
+    """
+    active_session = get_object_or_404(ChatSession, id=session_id)
+
+    handle = get_run(session_id)
+    if handle is not None:
+        return StreamingHttpResponse(handle.subscribe(), content_type='text/event-stream')
+
+    from agent import peek_interrupt
+    gate = peek_interrupt(session_id)
+    if gate is not None:
+        def gate_frame():
+            payload = {
+                "type": "interrupt",
+                "tool": gate.get("tool", ""),
+                "label": gate.get("label", ""),
+                "image_url": _media_url_for_local_path(gate.get("image_path", "")),
+                "args": gate.get("args", {}),
+                "allowed_decisions": gate.get("allowed_decisions", []),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+        return StreamingHttpResponse(gate_frame(), content_type='text/event-stream')
+
+    last = active_session.messages.order_by("created_at").last()
+    if last is not None and last.sender == "assistant":
+        def final_frame():
+            payload = {
+                "type": "final",
+                "text": last.text,
+                "3d_object_path": last.object_path or "",
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+        return StreamingHttpResponse(final_frame(), content_type='text/event-stream')
+
+    return JsonResponse({"active": False})
+
 
 def api_stop_chat(request):
     """Kills the running Modal container using the call_id."""
