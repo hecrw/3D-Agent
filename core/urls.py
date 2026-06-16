@@ -45,7 +45,9 @@ urlpatterns = [
     path('chat/<int:session_id>/delete/', views.delete_chat, name='delete_chat'),
     path('chat/<int:session_id>/rename/', views.rename_chat, name='rename_chat'),
     path('api/chat/<int:session_id>/message/', views.api_send_message, name='api_send_message'),
-    
+    path('api/chat/<int:session_id>/resume/', views.api_resume_chat, name='api_resume_chat'),
+    path('api/chat/<int:session_id>/reconnect/', views.api_reconnect, name='api_reconnect'),
+
     # NEW: Endpoint to stop/cancel the Modal function call
     path('api/chat/stop/', views.api_stop_chat, name='api_stop_chat'),
     
