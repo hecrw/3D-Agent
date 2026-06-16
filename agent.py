@@ -15,6 +15,7 @@ from tools import (
     image_search,
     download_image,
     render_mesh_views,
+    compose_scene,
     check_alignment,
 )
  
@@ -160,6 +161,27 @@ def tool_render_mesh_views(mesh_path: str) -> str:
     return "\n".join(lines)
 
 @tool
+def tool_compose_scene(placements: str) -> str:
+    """Combine existing 3D meshes (.glb) into ONE scene in a shared coordinate
+    space and return the combined .glb. Use this to arrange already-generated
+    assets together — e.g. "place the cat next to the dog", "put these in a row",
+    "set the lamp at x=1".
+
+    placements: a JSON list, one entry per mesh:
+      [{"mesh_path": "<absolute path to a .glb>",   // required
+        "x": <float>, "y": <float>, "z": <float>,   // optional world coords of the
+                                                     //   object's center-bottom (m)
+        "scale": <float>,        // optional, default 1.0
+        "rot_z_deg": <float>}]   // optional yaw about the vertical axis
+    Omit x/y/z on ALL entries to auto-arrange them side by side in a row on the
+    ground. Generated meshes are ~unit-sized, so use scale to match relative sizes
+    and offsets of ~0.5-2.0 to separate objects. Pass the [Previously generated
+    asset: ...] paths from earlier turns as mesh_path."""
+    out = _stamp("scene", "glb")
+    path = compose_scene(placements=placements, out_path=out)
+    return f"Composed scene saved: {path}"
+
+@tool
 def tool_inspect_image(image_path: str, question: str) -> str:
     """View a local image with vision and answer a question about it.
 
@@ -236,6 +258,7 @@ ALL_TOOLS = [
     tool_partcrafter,
     tool_hunyuan3d2,
     tool_render_mesh_views,
+    tool_compose_scene,
     tool_inspect_image,
     tool_score_alignment,
 ]
@@ -255,6 +278,7 @@ TOOL_LABELS = {
     "tool_partcrafter": "Decomposing into parts",
     "tool_hunyuan3d2": "Generating 3D model",
     "tool_render_mesh_views": "Rendering views",
+    "tool_compose_scene": "Composing scene",
     "tool_inspect_image": "Inspecting image",
     "tool_score_alignment": "Scoring alignment",
 }
@@ -418,7 +442,10 @@ agent = create_agent(
     result ("the last one", "that mesh", "make it bigger", "now texture it",
     "render the previous object"), reuse the most recent such path as the
     mesh_path / image_path argument instead of generating from scratch. If several
-    are present and it is ambiguous, prefer the most recent one. These bracketed
+    are present and it is ambiguous, prefer the most recent one. To put TWO OR MORE
+    existing assets together in one scene ("place the cat next to the dog", "add the
+    cat onto the couch", "line these up"), call tool_compose_scene with their
+    [Previously generated asset: ...] paths — do NOT regenerate them. These bracketed
     tags are internal context for you only — NEVER repeat them or any file path in
     your reply to the user. Refer to assets in plain language ("your previous
     model", "the cat you generated").

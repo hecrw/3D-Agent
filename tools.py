@@ -780,6 +780,76 @@ def _render_mesh_views_local(mesh_path: str | Path,
     return paths
 
 
+def compose_scene(placements: "list[dict] | str",
+                  out_path: str | Path | None = None,
+                  gap: float = 0.15) -> str:
+    """Place existing meshes into ONE scene in a shared coordinate space.
+
+    Deterministic composition — no model, no GPU. Each input mesh keeps its own
+    geometry + material (we do NOT concatenate, so textures survive).
+
+    placements: list of dicts (or a JSON string of that list), one per object:
+        {"mesh_path": str,            # required, a .glb/.obj/...
+         "x","y","z": float,          # optional world coords of the object's
+                                      #   center-bottom (meters)
+         "scale": float,              # optional, default 1.0
+         "rot_z_deg": float}          # optional yaw about the vertical (Z) axis
+    If NO item supplies x/y/z, objects are auto-arranged left-to-right in a row,
+    bottoms on the ground (z=0), centered on y=0, separated by `gap`. Otherwise
+    each object's center-bottom is placed at its (x,y,z) (missing coords -> 0).
+
+    Returns the saved combined-GLB path.
+    """
+    import json
+    import numpy as np
+    from trimesh.transformations import (translation_matrix, scale_matrix,
+                                         rotation_matrix, concatenate_matrices)
+
+    if isinstance(placements, str):
+        placements = json.loads(placements)
+    out_path = str(out_path or f"scene_{int(time.time())}.glb")
+
+    scene = trimesh.Scene()
+    cursor_x = 0.0
+    for i, pl in enumerate(placements):
+        loaded = trimesh.load(str(pl["mesh_path"]))
+        # dump() bakes each sub-mesh's scene transform into world space and keeps
+        # per-part visuals; a single Trimesh becomes a 1-element list.
+        parts = loaded.dump() if isinstance(loaded, trimesh.Scene) else [loaded.copy()]
+
+        mins = np.min([p.bounds[0] for p in parts], axis=0)
+        maxs = np.max([p.bounds[1] for p in parts], axis=0)
+        center = (mins + maxs) / 2.0
+        ext = maxs - mins
+
+        s = float(pl.get("scale", 1.0))
+        rz = float(pl.get("rot_z_deg", 0.0))
+
+        if any(k in pl for k in ("x", "y", "z")):
+            tx, ty, tz = float(pl.get("x", 0.0)), float(pl.get("y", 0.0)), float(pl.get("z", 0.0))
+        else:
+            tx, ty, tz = cursor_x + ext[0] * s / 2.0, 0.0, 0.0
+            cursor_x += ext[0] * s + gap
+
+        # Move center-bottom to origin, scale, yaw, then translate to the target.
+        m = concatenate_matrices(
+            translation_matrix([tx, ty, tz]),
+            rotation_matrix(np.radians(rz), [0, 0, 1]),
+            scale_matrix(s),
+            translation_matrix([-center[0], -center[1], -mins[2]]),
+        )
+        for j, p in enumerate(parts):
+            pc = p.copy()
+            pc.apply_transform(m)
+            scene.add_geometry(pc, geom_name=f"obj{i}_{j}")
+        print(f"[compose] obj{i} {Path(pl['mesh_path']).name} "
+              f"size={np.round(ext, 2).tolist()} -> ({tx:.2f},{ty:.2f},{tz:.2f})")
+
+    scene.export(out_path)
+    print(f"[compose] {len(placements)} objects -> {out_path}")
+    return out_path
+
+
 class AlignmentReport(BaseModel):
     accept: bool
     score: float
