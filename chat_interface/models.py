@@ -21,6 +21,9 @@ class ChatMessage(models.Model):
     # to allow the Stop button to cancel the specific GPU task.
     modal_call_id = models.CharField(max_length=255, blank=True, null=True)
     attachment = models.ImageField(upload_to='chat_attachments/', blank=True, null=True)
+    # An uploaded finished 3D mesh (.glb/.obj/...) the user wants the agent to act
+    # on directly (compose, render, re-texture) — bypasses the image->3D pipeline.
+    mesh_upload = models.FileField(upload_to='chat_meshes/', blank=True, null=True)
     created_at = models.DateTimeField(default=now)
 
     class Meta:
