@@ -481,6 +481,27 @@ def _run_modal_job(tag: str,
         return out_path
 
 
+def _run_local_trellis(base_url: str, image_path, out_path: str,
+                       seed: int, decimation_target: int,
+                       texture_size: int, remesh: bool) -> str:
+    """Post the image to a local TRELLIS HTTP server (eval/local_trellis_server.py)
+    and save the returned GLB. Synchronous — no Modal submit/poll/volume dance."""
+    print(f"[trellis2] local -> {base_url}/generate ({image_path})")
+    with open(str(image_path), "rb") as fh:
+        resp = _session.post(
+            f"{base_url.rstrip('/')}/generate",
+            files={"image": fh},
+            data={"seed": str(seed), "decimation_target": str(decimation_target),
+                  "texture_size": str(texture_size), "remesh": str(remesh).lower()},
+            timeout=1800,
+        )
+    resp.raise_for_status()
+    with open(out_path, "wb") as out:
+        out.write(resp.content)
+    print(f"[trellis2] done -> {out_path} ({len(resp.content)/1e6:.2f} MB)")
+    return out_path
+
+
 def trellis2(image_path: str | Path,
              out_path: str | Path | None = None,
              pipeline_type: str = "1024_cascade",
@@ -489,8 +510,13 @@ def trellis2(image_path: str | Path,
              decimation_target: int = 1_000_000,
              texture_size: int = 4096,
              **job_kwargs) -> str:
-    """TRELLIS.2: image -> GLB."""
+    """TRELLIS.2: image -> GLB. Uses a local TRELLIS server if LOCAL_TRELLIS_URL
+    is set (the GPU box), otherwise submits a Modal job."""
     out_path = str(out_path or f"model_{int(time.time())}.glb")
+    local_url = os.environ.get("LOCAL_TRELLIS_URL")
+    if local_url:
+        return _run_local_trellis(local_url, image_path, out_path,
+                                  seed, decimation_target, texture_size, remesh)
     return _run_modal_job(
         tag="trellis2",
         submit_url=f"{TRELLIS_GEN_URL}/generate",
