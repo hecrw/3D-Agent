@@ -358,6 +358,29 @@ def _existing_artifacts(tag: str) -> dict[str, str | None]:
     return {"mesh": mesh, "restyled": restyled[-1] if restyled else None}
 
 
+def _existing_input_image(tag: str, cond_name: str,
+                          photo_path: str | None) -> tuple[str | None, str | None]:
+    """Find the image that would be fed to the 3D backbone for this cell, if a
+    prior run already produced it — so we can skip the (expensive) Gemini concept
+    + restyle calls and just re-run the backbone.
+
+    Returns (image_path, kind) or (None, None). For restyled conditions the input
+    is the restyled image; for `raw` it's the concept image (generated mode) or
+    the photo (retrieved/photo mode).
+    """
+    out = agent.OUT
+    restyled = sorted(out.glob(f"objaverse_{tag}_*.png"), key=lambda p: p.stat().st_mtime)
+    if restyled:
+        return str(restyled[-1]), "restyled"
+    if cond_name == "raw":
+        if photo_path:
+            return photo_path, "photo"
+        concept = sorted(out.glob(f"concept_{tag}_*.png"), key=lambda p: p.stat().st_mtime)
+        if concept:
+            return str(concept[-1]), "concept"
+    return None, None
+
+
 def run_one(caption: str, cond_name: str, instruction: str | None,
             tag: str = "", photo_path: str | None = None) -> dict:
     global _EVAL_TAG
@@ -371,6 +394,16 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
         produced = _existing_artifacts(tag) if tag else {"mesh": None}
         if produced["mesh"]:
             print(f"    reusing existing mesh {Path(produced['mesh']).name}")
+        elif tag and _existing_input_image(tag, cond_name, photo_path)[0]:
+            # No mesh, but the concept/restyled/retrieved image already exists:
+            # skip the Gemini concept + restyle calls and just run the backbone.
+            inp, kind = _existing_input_image(tag, cond_name, photo_path)
+            print(f"    reusing existing {kind} image {Path(inp).name} "
+                  f"-> backbone only")
+            out_glb = str(agent.OUT / f"trellis2_{tag}_{int(time.time()*1000)}.glb")
+            mesh = tools.trellis2(inp, out_path=out_glb)
+            produced = {"mesh": mesh,
+                        "restyled": inp if kind == "restyled" else ""}
         else:
             # Build the user message. The eval instruction sets the restyle axes
             # for this condition; the STOP directive keeps the pipeline fixed
