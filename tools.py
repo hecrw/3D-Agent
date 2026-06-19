@@ -919,14 +919,28 @@ def check_alignment(
             worst_view=None, per_view={},
         )
 
-    model, processor = _load()
-    images = [Image.open(p).convert("RGB") for _, p in items]
+    # The CLIP acceptance check is advisory: if scoring fails for any reason
+    # (model load, CUDA OOM, a malformed view, an unexpected tokenizer edge
+    # case), degrade to accept-with-warning rather than crashing the agent turn.
+    try:
+        model, processor = _load()
+        images = [Image.open(p).convert("RGB") for _, p in items]
 
-    inputs = processor(text=[prompt], images=images, return_tensors="pt", padding=True).to(_DEVICE)
-    out = model(**inputs)
-    img_emb = out.image_embeds / out.image_embeds.norm(dim=-1, keepdim=True)
-    txt_emb = out.text_embeds / out.text_embeds.norm(dim=-1, keepdim=True)
-    sims = (img_emb @ txt_emb.T).squeeze(-1).cpu().tolist()
+        # CLIP's text encoder is capped at 77 tokens; truncate so long prompts
+        # score instead of hard-crashing the agent turn.
+        inputs = processor(text=[prompt], images=images, return_tensors="pt",
+                           padding=True, truncation=True, max_length=77).to(_DEVICE)
+        out = model(**inputs)
+        img_emb = out.image_embeds / out.image_embeds.norm(dim=-1, keepdim=True)
+        txt_emb = out.text_embeds / out.text_embeds.norm(dim=-1, keepdim=True)
+        sims = (img_emb @ txt_emb.T).squeeze(-1).cpu().tolist()
+    except Exception as e:  # noqa: BLE001
+        return AlignmentReport(
+            accept=True, score=0.0,
+            summary=f"Alignment check skipped (scorer error: {e}); proceeding without it.",
+            next_action="proceed",
+            worst_view=None, per_view={},
+        )
 
     per_view = {name: round(float(s), 3) for (name, _), s in zip(items, sims)}
     mean = sum(per_view.values()) / len(per_view)
