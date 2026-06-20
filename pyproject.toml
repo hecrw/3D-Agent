@@ -104,6 +104,7 @@ dependencies = [
     "yarl==1.23.0",
     "zstandard==0.25.0",
     "pyrender>=0.1.45",
+    "langgraph-checkpoint-sqlite>=3.1.0",
 ]
 
 [[tool.uv.index]]
