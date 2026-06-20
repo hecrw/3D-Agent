@@ -543,6 +543,31 @@ def _pending_interrupt(config):
 _ARTIFACT_RE = re.compile(r'[^\s\'"]*3d_outputs[/\\][^\s\'"]+\.glb', re.IGNORECASE)
 
 
+def _turn_artifacts(config):
+    """Every .glb produced since the user's last message — across all approval
+    gates in this turn. The per-segment scan in _run_stream only sees the latest
+    resume, so we read the whole conversation from the checkpointer here to catch
+    objects approved in earlier gate cycles too (deduped, in order)."""
+    try:
+        msgs = agent.get_state(config).values.get("messages", [])
+    except Exception:  # noqa: BLE001
+        return []
+    # Walk back to the last human turn so we don't pull in prior turns' objects.
+    start = 0
+    for i in range(len(msgs) - 1, -1, -1):
+        if msgs[i].__class__.__name__ == "HumanMessage":
+            start = i
+            break
+    found = []
+    for m in msgs[start:]:
+        content = getattr(m, "content", None)
+        if isinstance(content, str):
+            for hit in _ARTIFACT_RE.findall(content):
+                if hit not in found:
+                    found.append(hit)
+    return found
+
+
 def _run_stream(stream_input, config):
     """Shared driver for both a fresh run and a resume. Yields the same event
     dicts as process_chat_stream and ends with EITHER an `interrupt` event (the
@@ -550,7 +575,8 @@ def _run_stream(stream_input, config):
     f = io.StringIO()
     final_message = None
     last_status = None
-    artifact_path = ""  # newest .glb produced by a tool during this run
+    artifact_path = ""       # newest .glb produced by a tool during this run
+    artifact_paths = []      # EVERY .glb produced this run, in order (deduped)
 
     def drain_stdout():
         nonlocal last_status
@@ -586,13 +612,15 @@ def _run_stream(stream_input, config):
                 last_msg = node_data["messages"][-1]
                 final_message = last_msg  # keep updating; loop ends with the real final
 
-                # Harvest the newest mesh path from any tool result in this chunk.
+                # Harvest EVERY mesh path from tool results in this chunk, in
+                # order, so a run that produces several objects shows them all.
                 for msg in node_data["messages"]:
                     content = getattr(msg, "content", None)
                     if isinstance(content, str):
-                        m = _ARTIFACT_RE.search(content)
-                        if m:
-                            artifact_path = m.group(0)
+                        for hit in _ARTIFACT_RE.findall(content):
+                            if hit not in artifact_paths:
+                                artifact_paths.append(hit)
+                            artifact_path = hit
 
                 if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
                     for tc in last_msg.tool_calls:
@@ -615,7 +643,13 @@ def _run_stream(stream_input, config):
 
     # 5. Otherwise the run finished: emit the normalized final text plus the
     #    mesh path harvested from tool output (the reply text no longer carries it).
-    yield {"type": "text", "content": _normalize_text(final_message), "artifact": artifact_path}
+    # Prefer the whole-turn scan (catches objects approved in earlier gate
+    # cycles); fall back to what this segment harvested.
+    all_artifacts = _turn_artifacts(config) or artifact_paths
+    if all_artifacts:
+        artifact_path = all_artifacts[-1]
+    yield {"type": "text", "content": _normalize_text(final_message),
+           "artifact": artifact_path, "artifacts": all_artifacts}
 
 
 def process_chat_stream(user_input, chat_history_list, user_image_url=None,

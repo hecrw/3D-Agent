@@ -120,6 +120,11 @@
         .ai-text { font-size: 15px; line-height: 1.6; color: var(--text-main); }
 
         /* Assets */
+        .asset-grid { display: flex; flex-direction: column; }
+        .asset-grid.multi { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .asset-grid.multi .asset-wrapper { margin-top: 0; }
+        .asset-grid.multi .asset-view { aspect-ratio: 1 / 1; }
+        @media (max-width: 520px) { .asset-grid.multi { grid-template-columns: 1fr; } }
         .asset-wrapper { margin-top: 12px; border-radius: 20px; overflow: hidden; border: 1px solid var(--border); background: var(--card-bg); box-shadow: 0 8px 30px rgba(0,0,0,0.04); }
         .asset-view { width: 100%; aspect-ratio: 16 / 10; }
         .asset-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.01); }
@@ -268,21 +273,27 @@
                         </div>
                         <div class="ai-text markdown-content">{{ msg.text }}</div>
                         
-                        {% if msg.object_path %}
-                            <div class="asset-wrapper">
-                                {% if ".glb" in msg.object_path %}
-                                    <model-viewer class="asset-view" src="{{ msg.object_path }}" auto-rotate camera-controls></model-viewer>
-                                {% else %}
-                                    <img src="{{ msg.object_path }}" class="w-full h-auto block" alt="Generated asset">
-                                {% endif %}
-                                <div class="asset-footer">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Production Asset</span>
-                                    <a href="{{ msg.object_path }}" download class="toggle-btn" style="width: 34px; height: 34px; border-radius: 10px;">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                                    </a>
+                        {% with assets=msg.asset_list %}
+                        {% if assets %}
+                            <div class="asset-grid{% if assets|length > 1 %} multi{% endif %}">
+                            {% for asset in assets %}
+                                <div class="asset-wrapper">
+                                    {% if ".glb" in asset %}
+                                        <model-viewer class="asset-view" src="{{ asset }}" auto-rotate camera-controls></model-viewer>
+                                    {% else %}
+                                        <img src="{{ asset }}" class="w-full h-auto block" alt="Generated asset">
+                                    {% endif %}
+                                    <div class="asset-footer">
+                                        <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">{% if assets|length > 1 %}Option {{ forloop.counter }}{% else %}Production Asset{% endif %}</span>
+                                        <a href="{{ asset }}" download class="toggle-btn" style="width: 34px; height: 34px; border-radius: 10px;">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                        </a>
+                                    </div>
                                 </div>
+                            {% endfor %}
                             </div>
                         {% endif %}
+                        {% endwith %}
                     </div>
                 {% endif %}
             </div>
@@ -596,7 +607,15 @@
             if (meshInput) meshInput.value = '';
         }
 
-        function appendMessage(sender, text, objectPath = null, imageUrl = null) {
+        function assetCardHtml(src, label) {
+            const is3D = src.toLowerCase().endsWith('.glb');
+            const view = is3D
+                ? `<model-viewer class="asset-view" src="${src}" auto-rotate camera-controls></model-viewer>`
+                : `<img src="${src}" class="w-full h-auto block">`;
+            return `<div class="asset-wrapper">${view}<div class="asset-footer"><span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">${label}</span><a href="${src}" download class="toggle-btn" style="width: 34px; height: 34px; border-radius: 10px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a></div></div>`;
+        }
+
+        function appendMessage(sender, text, objectPath = null, imageUrl = null, objectPaths = null) {
             if (!chatContainer) return;
             const box = document.createElement('div');
             box.className = 'message-box';
@@ -604,10 +623,13 @@
                 let imgHtml = imageUrl ? `<div style="margin-bottom: 12px; max-width: 240px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);"><img src="${imageUrl}" style="width: 100%; height: auto; display: block;"></div>` : '';
                 box.innerHTML = `<div class="user-msg"><div class="user-content">${imgHtml}<div class="markdown-content">${text}</div></div></div>`;
             } else {
+                // Show every produced asset (even a weaker one); fall back to single.
+                const assets = (objectPaths && objectPaths.length) ? objectPaths : (objectPath ? [objectPath] : []);
                 let assetHtml = '';
-                if (objectPath) {
-                    const is3D = objectPath.toLowerCase().endsWith('.glb');
-                    assetHtml = `<div class="asset-wrapper">${is3D ? `<model-viewer class="asset-view" src="${objectPath}" auto-rotate camera-controls></model-viewer>` : `<img src="${objectPath}" class="w-full h-auto block">`}<div class="asset-footer"><span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Production Asset</span><a href="${objectPath}" download class="toggle-btn" style="width: 34px; height: 34px; border-radius: 10px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a></div></div>`;
+                if (assets.length) {
+                    const cards = assets.map((s, i) =>
+                        assetCardHtml(s, assets.length > 1 ? `Option ${i + 1}` : 'Production Asset')).join('');
+                    assetHtml = `<div class="asset-grid${assets.length > 1 ? ' multi' : ''}">${cards}</div>`;
                 }
                 box.innerHTML = `<div class="ai-msg"><div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Assistant</div></div><div class="ai-text markdown-content">${marked.parse(text)}</div>${assetHtml}</div>`;
             }
@@ -635,9 +657,17 @@
             if (decisions.includes('edit'))    controls += btn('edit', 'Edit');
             if (decisions.includes('reject'))  controls += btn('reject', 'Reject');
 
+            // Describe the upcoming gated action as a verb phrase so the
+            // sentence reads naturally (the tool labels are status text, not nouns).
+            const gateAction = ({
+                tool_trellis2: 'generate the 3D model',
+                tool_hunyuan3d2: 'generate the 3D model',
+                tool_partcrafter: 'decompose it into 3D parts',
+                tool_trellis2_texture: 're-texture the model',
+            }[data.tool]) || 'continue';
             box.innerHTML = `
                 <div class="ai-header"><div class="ai-icon">AI</div><div class="ai-label">Approval needed</div></div>
-                <div class="ai-text" style="margin-top:6px;">Review the image before I send it to <b>${data.label || data.tool}</b>. Does this look right?</div>
+                <div class="ai-text" style="margin-top:6px;">Review the image before I <b>${gateAction}</b>. Does this look right?</div>
                 ${imgHtml}
                 <div data-gate-feedback style="display:none; margin:8px 0;">
                     <textarea data-gate-msg placeholder="What should change? (e.g. white background, show the handle)" style="width:100%; min-height:60px; padding:8px; border-radius:8px; border:1px solid var(--border); background:transparent; color:inherit; resize:vertical;"></textarea>
@@ -751,7 +781,7 @@
                             renderApprovalGate(data);
                         } else if (data.type === 'final') {
                             if (loadingEl) loadingEl.remove();
-                            appendMessage('assistant', data.text, data["3d_object_path"]);
+                            appendMessage('assistant', data.text, data["3d_object_path"], null, data["3d_object_paths"]);
                         }
                     } catch (e) {}
                 }
@@ -793,7 +823,7 @@
                                     renderApprovalGate(data);
                                 } else if (data.type === 'final') {
                                     if (loadingEl) loadingEl.remove();
-                                    appendMessage('assistant', data.text, data["3d_object_path"]);
+                                    appendMessage('assistant', data.text, data["3d_object_path"], null, data["3d_object_paths"]);
                                 }
                             } catch (e) {}
                         }

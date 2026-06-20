@@ -316,34 +316,51 @@ def _stream_agent_events(events, active_session):
             print(f"RAW BOT TEXT: {raw_text}")
 
             bot_3d_path = ""
-            # Prefer the mesh path harvested from tool output (the reply text no
-            # longer contains paths); fall back to scraping the text.
-            path_source = event.get("artifact") or raw_text
-            file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png|jpe?g|webp|gif))', path_source, re.IGNORECASE)
-            if file_match:
-                filename = file_match.group(1).lstrip('/\\')
-                bot_3d_path = f"/media/3d_outputs/{filename}"
+            # Every .glb this turn produced (in order) so the UI can show them all,
+            # even a weaker one. Falls back to the single harvested artifact.
+            obj_urls = []
+            for a in (event.get("artifacts") or ([event["artifact"]] if event.get("artifact") else [])):
+                mm = re.search(r'3d_outputs[/\\](.+?\.glb)', a, re.IGNORECASE)
+                if mm:
+                    fname = mm.group(1).lstrip('/\\')
+                    url = f"/media/3d_outputs/{fname}"
+                    if url not in obj_urls:
+                        obj_urls.append(url)
+
+            if obj_urls:
+                bot_3d_path = obj_urls[0]
+                path_source = event.get("artifact") or "3d_outputs"
             else:
-                # Check for external URLs if no local output found (e.g. from image search)
-                url_match = re.search(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', raw_text, re.IGNORECASE)
-                if url_match:
-                    bot_3d_path = url_match.group(1)
+                # No mesh — fall back to scraping the text for an image/URL.
+                path_source = event.get("artifact") or raw_text
+                file_match = re.search(r'3d_outputs[/\\](.+?\.(?:glb|png|jpe?g|webp|gif))', path_source, re.IGNORECASE)
+                if file_match:
+                    fname = file_match.group(1).lstrip('/\\')
+                    bot_3d_path = f"/media/3d_outputs/{fname}"
+                else:
+                    # External URLs (e.g. from image search)
+                    url_match = re.search(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', raw_text, re.IGNORECASE)
+                    if url_match:
+                        bot_3d_path = url_match.group(1)
 
             bot_text = scrub_bot_text(raw_text)
             if bot_3d_path and "3d_outputs" in path_source and "preview window" not in bot_text:
-                bot_text += "\n\nYou can view it in the chat."
+                n = len(obj_urls)
+                bot_text += f"\n\nYou can view {'them' if n > 1 else 'it'} in the chat."
 
             ChatMessage.objects.create(
                 session=active_session,
                 sender="assistant",
                 text=bot_text,
                 object_path=bot_3d_path,
+                object_paths=json.dumps(obj_urls) if len(obj_urls) > 1 else "",
             )
 
             final_data = {
                 "type": "final",
                 "text": bot_text,
                 "3d_object_path": bot_3d_path,
+                "3d_object_paths": obj_urls,
             }
             yield f"data: {json.dumps(final_data)}\n\n"
 
@@ -415,6 +432,7 @@ def api_reconnect(request, session_id):
                 "type": "final",
                 "text": last.text,
                 "3d_object_path": last.object_path or "",
+                "3d_object_paths": last.asset_list(),
             }
             yield f"data: {json.dumps(payload)}\n\n"
         return StreamingHttpResponse(final_frame(), content_type='text/event-stream')
