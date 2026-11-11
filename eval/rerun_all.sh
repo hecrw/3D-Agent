@@ -63,7 +63,26 @@ preflight)
   fail=0; say() { printf '%-28s %s\n' "$1" "$2"; }
   nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv,noheader \
     && say "GPUs" "ok" || { say "GPUs" "nvidia-smi FAILED"; fail=1; }
-  [ -x "$PY" ] && say "eval venv" "$($PY --version)" || { say "eval venv" "missing $PY (python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt)"; fail=1; }
+  if [ -x "$PY" ]; then
+    say "eval venv" "$($PY --version)"
+    # requirements.txt is incomplete — the venv must come from uv.lock (uv sync --frozen)
+    if miss=$("$PY" -c "
+import importlib, importlib.util, sys
+mods = ['torch', 'transformers', 'trimesh', 'pyrender', 'numpy', 'django', 'huggingface_hub',
+        'langchain_google_genai', 'langgraph.checkpoint.sqlite', 'google.genai', 'modal']
+bad = [m for m in mods if importlib.util.find_spec(m.split('.')[0]) is None]
+try:
+    importlib.import_module('langgraph.checkpoint.sqlite')
+except Exception:
+    bad.append('langgraph.checkpoint.sqlite')
+print(' '.join(sorted(set(bad)))); sys.exit(1 if bad else 0)" 2>/dev/null); then
+      say "eval venv packages" "ok"
+    else
+      say "eval venv packages" "MISSING: $miss (run: uv sync --frozen)"; fail=1
+    fi
+  else
+    say "eval venv" "missing $PY (run: uv sync --frozen)"; fail=1
+  fi
   [ -f .env ] && grep -q GEMINI_API_KEY .env && say ".env" "ok" || { say ".env" "missing GEMINI_API_KEY (copy .env from your Mac)"; fail=1; }
   if command -v conda >/dev/null; then
     for e in "$TRELLIS_ENV" "$HUNYUAN_ENV" "$PARTCRAFTER_ENV" "$ULIP_ENV"; do
@@ -82,10 +101,13 @@ preflight)
   if [ -z "$prof" ]; then say "modal" "not authed (bash eval/setup_box.sh modal)"; fail=1
   elif [ "$prof" != "$ws" ]; then say "modal" "logged in as $prof but .env expects $ws"; fail=1
   else say "modal" "authed as $prof"; fi
-  for h in hunyuan3d-2-generator-web partcrafter-objectgenerator-web; do
-    # -L: Modal answers 303 after 150 s while a cold container is still loading
-    code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 900 "https://$ws--$h.modal.run/" || true)
-    [ "$code" = 200 ] && say "modal $h" "up" || { say "modal $h" "HTTP $code (deployed? cold start can take minutes)"; fail=1; }
+  # Ask Modal whether the apps are DEPLOYED (instant, no GPU wake-up). Hitting
+  # the endpoint instead can block for many minutes on a cold start or while
+  # Modal is out of L4 capacity — that's not a deploy problem.
+  apps=$(modal app list --json 2>/dev/null || echo '[]')
+  for a in hunyuan3d-2 partcrafter; do
+    st=$(printf '%s' "$apps" | "$PY" -c "import json,sys; print(next((x['State'] for x in json.load(sys.stdin) if x.get('Description')=='$a'), 'not deployed'))")
+    [ "$st" = deployed ] && say "modal app $a" "deployed" || { say "modal app $a" "$st (run: modal deploy …/modal_app.py)"; fail=1; }
   done
   curl -s -o /dev/null -w '%{http_code}' https://generativelanguage.googleapis.com/ | grep -q '^[234]' \
     && say "Gemini reachable" "ok" || { say "Gemini reachable" "NO network to Google API"; fail=1; }
@@ -95,17 +117,37 @@ preflight)
   exit $fail
   ;;
 servers)
+  # TRELLIS.2 pulls the GATED facebook/dinov3-vitl16-pretrain-lvd1689m: the box
+  # must be logged in to Hugging Face with an account that was granted access.
+  "$PY" - <<'EOF' || exit 1
+from huggingface_hub import hf_hub_download
+try:
+    hf_hub_download("facebook/dinov3-vitl16-pretrain-lvd1689m", "config.json")
+    print("Hugging Face: DINOv3 access ok")
+except Exception as e:
+    raise SystemExit(f"Hugging Face: no access to the gated DINOv3 model ({type(e).__name__}).\n"
+                     "Request access at https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m\n"
+                     "then log in on this box:  .venv/bin/hf auth login")
+EOF
+  declare -A PIDS=()
   for pair in "$GPU_TRELLIS_GEN:$PORT_GEN" "$GPU_TRELLIS_RET:$PORT_RET"; do
     gpu=${pair%%:*}; port=${pair##*:}
     if curl -sf "http://127.0.0.1:$port/" >/dev/null; then echo "server :$port already up"; continue; fi
     CUDA_VISIBLE_DEVICES=$gpu nohup conda run --no-capture-output -n "$TRELLIS_ENV" \
       python eval/local_trellis_server.py --repo "$TRELLIS_REPO" --port "$port" \
       > "$RUN_DIR/logs/trellis_$port.log" 2>&1 &
+    PIDS[$port]=$!
     echo "started TRELLIS on GPU$gpu :$port (log $RUN_DIR/logs/trellis_$port.log)"
   done
   echo "waiting for servers to load weights..."
   for port in "$PORT_GEN" "$PORT_RET"; do
-    for _ in $(seq 1 120); do curl -sf "http://127.0.0.1:$port/" && echo && break; sleep 10; done
+    for _ in $(seq 1 120); do
+      curl -sf "http://127.0.0.1:$port/" && echo && break
+      if [ -n "${PIDS[$port]:-}" ] && ! kill -0 "${PIDS[$port]}" 2>/dev/null; then
+        echo "server :$port DIED — last log lines:"; tail -n 15 "$RUN_DIR/logs/trellis_$port.log"; exit 1
+      fi
+      sleep 10
+    done
   done
   ;;
 stop-servers)
@@ -113,6 +155,7 @@ stop-servers)
   ;;
 smoke)
   export LOCAL_TRELLIS_URL="http://127.0.0.1:$PORT_RET" AGENT_CKPT_PATH="$PWD/eval/runs/smoke_ckpt.sqlite3"
+  export CUDA_VISIBLE_DEVICES=$GPU_TRELLIS_RET   # CLIP scoring/rendering stay off the busy GPU 0
   "$PY" eval/run_pilot.py --run-id "smoke_$(date +%H%M)" --input retrieved --limit 1 --conditions raw all_on
   echo "Inspect the CSV above: status=ok, condition_enforced=True, backbone_tool set, agent_model_resolved set."
   ;;
@@ -121,6 +164,9 @@ agent)
   port=$(port_for "$mode")
   export LOCAL_TRELLIS_URL="http://127.0.0.1:$port"
   export AGENT_CKPT_PATH="$PWD/$RUN_DIR/ckpt_$mode.sqlite3"   # separate DB per parallel sweep
+  # CLIP scoring + rendering run in this process: keep them on the same GPU as
+  # this arm's TRELLIS server (default would be GPU 0, which is full).
+  [ "$mode" = generated ] && export CUDA_VISIBLE_DEVICES=$GPU_TRELLIS_GEN || export CUDA_VISIBLE_DEVICES=$GPU_TRELLIS_RET
   curl -sf "$LOCAL_TRELLIS_URL/" >/dev/null || { echo "TRELLIS server not up at $LOCAL_TRELLIS_URL (run: servers)"; exit 1; }
   for pass in $(seq 1 "$MAX_PASSES"); do
     echo "=== $mode pass $pass ==="
@@ -141,6 +187,7 @@ baselines)
   crun "$PARTCRAFTER_ENV" python eval/local_baseline_partcrafter.py --repo "$PARTCRAFTER_REPO" --images "$imgs" --out "$RUN_DIR/baseline_partcrafter_$mode"
   ;;
 score)
+  export CUDA_VISIBLE_DEVICES=$GPU_BASELINES   # CLIP scoring off the busy GPU 0
   for mode in retrieved generated; do
     for bb in trellis2 hunyuan3d2 partcrafter; do
       d="$RUN_DIR/baseline_${bb}_$mode"; [ -d "$d" ] || { echo "skip $d (not generated yet)"; continue; }
