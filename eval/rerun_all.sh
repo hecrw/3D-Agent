@@ -129,7 +129,10 @@ from dotenv import load_dotenv; load_dotenv(".env")
 from google import genai
 m = os.environ.get("AGENT_LLM_MODEL", "gemini-3.8-flash")
 try:
-    r = genai.Client(api_key=os.environ["GEMINI_API_KEY"]).models.generate_content(model=m, contents="Reply with: ok")
+    # keep a reference: a temporary Client is closed (garbage-collected)
+    # before the request goes out -> "client has been closed"
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    r = client.models.generate_content(model=m, contents="Reply with: ok")
     print(f"ok ({r.model_version})")
 except Exception as e:
     msg = str(e)
