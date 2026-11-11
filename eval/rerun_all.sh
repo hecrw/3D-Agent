@@ -49,6 +49,12 @@ export OPENCV_IO_ENABLE_OPENEXR=1
 export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.6}"   # A6000 / 3090 = Ampere sm_86
 
 mkdir -p "$RUN_DIR/logs"
+# conda from eval/setup_box.sh (Miniforge in $HOME), and the venv's `modal` CLI
+# on PATH (tools.py shells out to `modal volume get` to download results).
+CONDA_DIR="${CONDA_DIR:-$HOME/miniforge3}"
+# shellcheck disable=SC1091
+[ -f "$CONDA_DIR/etc/profile.d/conda.sh" ] && . "$CONDA_DIR/etc/profile.d/conda.sh"
+export PATH="$PWD/.venv/bin:$PATH"
 crun() { conda run --no-capture-output -n "$1" "${@:2}"; }
 port_for() { [ "$1" = generated ] && echo "$PORT_GEN" || echo "$PORT_RET"; }
 
@@ -59,21 +65,32 @@ preflight)
     && say "GPUs" "ok" || { say "GPUs" "nvidia-smi FAILED"; fail=1; }
   [ -x "$PY" ] && say "eval venv" "$($PY --version)" || { say "eval venv" "missing $PY (python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt)"; fail=1; }
   [ -f .env ] && grep -q GEMINI_API_KEY .env && say ".env" "ok" || { say ".env" "missing GEMINI_API_KEY (copy .env from your Mac)"; fail=1; }
-  for e in "$TRELLIS_ENV" "$HUNYUAN_ENV" "$PARTCRAFTER_ENV" "$ULIP_ENV"; do
-    conda env list | awk '{print $1}' | grep -qx "$e" && say "conda env $e" "ok" || { say "conda env $e" "MISSING"; fail=1; }
-  done
+  if command -v conda >/dev/null; then
+    for e in "$TRELLIS_ENV" "$HUNYUAN_ENV" "$PARTCRAFTER_ENV" "$ULIP_ENV"; do
+      conda env list | awk '{print $1}' | grep -qx "$e" && say "conda env $e" "ok" || { say "conda env $e" "MISSING (bash eval/setup_box.sh ${e})"; fail=1; }
+    done
+  else
+    say "conda" "MISSING (bash eval/setup_box.sh conda)"; fail=1
+  fi
   for r in "$TRELLIS_REPO" "$HUNYUAN_REPO" "$PARTCRAFTER_REPO"; do
     [ -d "$r" ] && say "repo $(basename "$r")" "ok" || { say "repo $(basename "$r")" "MISSING ($r)"; fail=1; }
   done
   n=$(ls eval/dataset/images/*.png 2>/dev/null | wc -l)
   [ "$n" -ge 20 ] && say "input photos" "$n" || { say "input photos" "only $n/20 in eval/dataset/images"; fail=1; }
-  command -v modal >/dev/null && modal profile current >/dev/null 2>&1 && say "modal" "authed" \
-    || { say "modal" "not authed (needed if the agent routes to Hunyuan3D-2/PartCrafter)"; fail=1; }
+  ws=$(grep -E '^TRELLIS_WORKSPACE=' .env | cut -d= -f2 | tr -d '"')
+  prof=$(modal profile current 2>/dev/null || true)
+  if [ -z "$prof" ]; then say "modal" "not authed (bash eval/setup_box.sh modal)"; fail=1
+  elif [ "$prof" != "$ws" ]; then say "modal" "logged in as $prof but .env expects $ws"; fail=1
+  else say "modal" "authed as $prof"; fi
+  for h in hunyuan3d-2-generator-web partcrafter-objectgenerator-web; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 600 "https://$ws--$h.modal.run/" || true)
+    [ "$code" = 200 ] && say "modal $h" "up" || { say "modal $h" "HTTP $code (deployed? cold start can take minutes)"; fail=1; }
+  done
   curl -s -o /dev/null -w '%{http_code}' https://generativelanguage.googleapis.com/ | grep -q '^[234]' \
     && say "Gemini reachable" "ok" || { say "Gemini reachable" "NO network to Google API"; fail=1; }
   curl -s -o /dev/null https://huggingface.co && say "HF reachable" "ok" || { say "HF reachable" "NO (weights download)"; fail=1; }
-  gcc --version | head -1
-  command -v nvcc >/dev/null && nvcc --version | tail -1 || echo "nvcc not on PATH (only needed to build TRELLIS/Hunyuan extensions)"
+  [ -x "$CONDA_DIR/envs/cuda124/bin/nvcc" ] && say "build toolchain" "cuda124 env ok" \
+    || say "build toolchain" "missing (bash eval/setup_box.sh buildtools) — only needed for setup"
   exit $fail
   ;;
 servers)
