@@ -1,0 +1,65 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/590 [00:00<?, ?it/s]Loading weights: 100%|██████████| 590/590 [00:00<00:00, 10925.70it/s]
+[1mCLIPModel LOAD REPORT[0m from: openai/clip-vit-large-patch14
+Key                                  | Status     |  | 
+-------------------------------------+------------+--+-
+text_model.embeddings.position_ids   | UNEXPECTED |  | 
+vision_model.embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+[bicycle.jpg] 'bicycle'
+   picked rank 2 (p_photo=0.93, CC BY-SA 3.0)
+[cat.jpg] 'cat'
+   picked rank 1 (p_photo=0.57, CC BY-SA 3.0)
+[armchair.jpg] 'armchair'
+   picked rank 2 (p_photo=0.52, CC BY-SA 4.0)
+[car.jpg] 'car'
+   picked rank 2 (p_photo=0.75, CC BY-SA 4.0)
+[grand_piano.jpg] 'grand piano'
+   picked rank 2 (p_photo=0.72, CC BY-SA 3.0)
+[electric_guitar.jpg] 'electric guitar'
+   picked rank 3 (p_photo=0.72, CC BY-SA 3.0)
+[saxophone.jpg] 'saxophone'
+   picked rank 4 (p_photo=0.55, CC BY-SA 4.0)
+[teapot.jpg] 'teapot'
+   picked rank 12 (p_photo=0.58, CC BY-SA 4.0)
+[chandelier.jpg] 'chandelier'
+   picked rank 1 (p_photo=0.90, CC BY-SA 4.0)
+[fire_hydrant.jpg] 'fire hydrant'
+   picked rank 4 (p_photo=0.57, CC BY-SA 4.0)
+[paper_airplane.jpg] 'paper airplane'
+   picked rank 4 (p_photo=0.74, CC BY 3.0)
+[apple.jpg] 'apple'
+   picked rank 1 (p_photo=0.51, CC BY 2.0)
+[mug.jpg] 'mug'
+   picked rank 2 (p_photo=0.52, CC BY-SA 4.0)
+[potted_orchid.jpg] 'potted orchid'
+   picked rank 1 (p_photo=0.88, CC BY 2.0)
+[chess_set.jpg] 'chess set'
+   picked rank 3 (p_photo=0.75, CC BY-SA 3.0)
+[smartphone.jpg] 'smartphone'
+   picked rank 4 (p_photo=0.58, CC0)
+[kite.jpg] 'kite'
+   picked rank 1 (p_photo=0.90, CC BY-SA 4.0)
+[doll.jpg] 'doll'
+   picked rank 1 (p_photo=0.91, CC BY-SA 4.0)
+[trumpet.jpg] 'trumpet'
+   picked rank 5 (p_photo=0.80, CC BY-SA 4.0)
+[ring.jpg] 'ring'
+   picked rank 4 (p_photo=0.83, Public domain)
+[watermelon.jpg] 'watermelon'
+   picked rank 2 (p_photo=0.52, CC BY-SA 3.0)
+[soda_can.jpg] 'soda can'
+   picked rank 2 (p_photo=0.72, CC BY-SA 4.0)
+[hat.jpg] 'hat'
+   picked rank 1 (p_photo=0.53, Public domain)
+[vase.jpg] 'vase'
+   picked rank 2 (p_photo=0.64, CC BY-SA 4.0)
+[flag.jpg] 'flag'
+   picked rank 5 (p_photo=0.77, Public domain)
+[map.jpg] 'map'
+   picked rank 14 (p_photo=0.62, CC BY-SA 4.0)
+[letter_opener.jpg] 'letter opener'
+   picked rank 12 (p_photo=0.51, CC BY-SA 2.0)
+[pendant_necklace.jpg] 'pendant necklace'

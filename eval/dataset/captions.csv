@@ -1,51 +1,51 @@
-filename,caption,t3bench_line,source
-t3s_075.jpg,"A rusty, abandoned bicycle",75,original
-t3s_076.jpg,"A fluffy, orange cat",76,original
-t3s_047.jpg,A plush velvet armchair,47,original
-t3s_065.jpg,"A futuristic, sleek electric car model",65,original
-t3s_041.jpg,A polished mahogany grand piano,41,original
-t3s_029.jpg,A left-handed electric guitar painted black,29,original
-t3s_009.jpg,A gleaming silver saxophone,9,original
-t3s_021.jpg,A ceramic teapot with floral patterns,21,original
-t3s_059.jpg,A sparkling crystal chandelier,59,original
-t3s_008.jpg,A bright red fire hydrant,8,original
-t3s_051.jpg,A crisp paper airplane,51,original
-t3s_070.jpg,A shiny red apple,70,original
-t3s_085.jpg,"A chipped, white coffee mug",85,original
-t3s_091.jpg,A blooming potted orchid with purple flowers,91,original
-t3s_053.jpg,An intricately-carved wooden chess set,53,original
-t3s_073.jpg,"A sleek, slim smartphone",73,original
-t3s_054.jpg,A bright red kite with a frayed tail,54,original
-t3s_018.jpg,A vintage porcelain doll with a frilly dress,18,original
-t3s_042.jpg,A dented brass trumpet,42,original
-t3s_017.jpg,A sparkling diamond ring in a velvet box,17,original
-t3s_004.jpg,A golden retriever with a blue bowtie,4,random
-t3s_006.jpg,A pair of polka-dotted sneakers,6,random
-t3s_010.jpg,A leather-bound book with gold details,10,random
-t3s_019.jpg,A chameleon perched on a tree branch,19,random
-t3s_020.jpg,A tarnished brass pocket watch,20,random
-t3s_025.jpg,A shiny emerald green beetle,25,random
-t3s_027.jpg,A velvet cushion stitched with golden threads,27,random
-t3s_028.jpg,A small porcelain white rabbit figurine,28,random
-t3s_033.jpg,A tattered old explorer’s map,33,random
-t3s_036.jpg,"A thick, green-spined book with yellowed pages",36,random
-t3s_038.jpg,A well-worn straw sun hat,38,random
-t3s_040.jpg,An antique glass perfume bottle,40,random
-t3s_043.jpg,A pristine white wedding gown,43,random
-t3s_055.jpg,"A smooth, round opal stone",55,random
-t3s_057.jpg,"A delicate, handmade lace doily",57,random
-t3s_058.jpg,A sturdy mahogany walking cane,58,random
-t3s_060.jpg,A worn-out red flannel shirt,60,random
-t3s_062.jpg,A dusty classic typewriter,62,random
-t3s_071.jpg,A worn-out leather briefcase,71,random
-t3s_074.jpg,"A wet, vibrant beach ball",74,random
-t3s_079.jpg,A weather-beaten wooden bat,79,random
-t3s_081.jpg,"An old, frayed straw hat",81,random
-t3s_082.jpg,A scuffed up soccer ball,82,random
-t3s_083.jpg,A pair of worn-in blue jeans,83,random
-t3s_084.jpg,A well-loved stuffed teddy bear,84,random
-t3s_093.jpg,A sparkling diamond tiara,93,random
-t3s_096.jpg,An elegant feather-quill ink pen,96,random
-t3s_098.jpg,A silver mirror with ornate detailing,98,random
-t3s_099.jpg,A green enameled watering can,99,random
-t3s_100.jpg,A classic leatherette radio with dials,100,random
+filename,caption,object,t3bench_line,source
+bicycle.jpg,a bicycle,bicycle,75,submission
+cat.jpg,a cat,cat,76,submission
+armchair.jpg,an armchair,armchair,47,submission
+car.jpg,a car,car,65,submission
+grand_piano.jpg,a grand piano,grand piano,41,submission
+electric_guitar.jpg,an electric guitar,electric guitar,29,submission
+saxophone.jpg,a saxophone,saxophone,9,submission
+teapot.jpg,a teapot,teapot,21,submission
+chandelier.jpg,a chandelier,chandelier,59,submission
+fire_hydrant.jpg,a fire hydrant,fire hydrant,8,submission
+paper_airplane.jpg,a paper airplane,paper airplane,51,submission
+apple.jpg,an apple,apple,70,submission
+mug.jpg,a mug,mug,85,submission
+potted_orchid.jpg,a potted orchid,potted orchid,91,submission
+chess_set.jpg,a chess set,chess set,53,submission
+smartphone.jpg,a smartphone,smartphone,73,submission
+kite.jpg,a kite,kite,54,submission
+doll.jpg,a doll,doll,18,submission
+trumpet.jpg,a trumpet,trumpet,42,submission
+ring.jpg,a ring,ring,17,submission
+watermelon.jpg,a watermelon,watermelon,16,random
+soda_can.jpg,a soda can,soda can,35,random
+hat.jpg,a hat,hat,64,random
+vase.jpg,a vase,vase,89,random
+flag.jpg,a flag,flag,14,random
+map.jpg,a map,map,69,random
+letter_opener.jpg,a letter opener,letter opener,39,random
+pendant_necklace.jpg,a pendant necklace,pendant necklace,37,random
+key.jpg,a key,key,56,random
+rocking_horse.jpg,a rocking horse,rocking horse,3,random
+wreath.jpg,a wreath,wreath,97,random
+blanket.jpg,a blanket,blanket,94,random
+quilt.jpg,a quilt,quilt,46,random
+brooch.jpg,a brooch,brooch,22,random
+champagne_flute.jpg,a champagne flute,champagne flute,80,random
+pair_of_shoes.jpg,a pair of shoes,pair of shoes,95,random
+pocket_watch.jpg,a pocket watch,pocket watch,72,random
+candle_holder.jpg,a candle holder,candle holder,45,random
+pair_of_swimming_goggles.jpg,a pair of swimming goggles,pair of swimming goggles,30,random
+top_hat.jpg,a top hat,top hat,48,random
+crowbar.jpg,a crowbar,crowbar,50,random
+cactus.jpg,a cactus,cactus,1,random
+scarf.jpg,a scarf,scarf,32,random
+lipstick.jpg,a lipstick,lipstick,66,random
+flamingo_lawn_ornament.jpg,a flamingo lawn ornament,flamingo lawn ornament,90,random
+sandcastle.jpg,a sandcastle,sandcastle,12,random
+carnival_mask.jpg,a carnival mask,carnival mask,68,random
+sunflower.jpg,a sunflower,sunflower,11,random
+wooden_chest.jpg,a wooden chest,wooden chest,67,random
+teacup.jpg,a teacup,teacup,44,random

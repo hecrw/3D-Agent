@@ -24,7 +24,8 @@ bias). Pinned judge model, temperature 0, fixed seed.
 
 Pairs judged per (input mode, prompt) — chosen to answer the paper's questions
 without judging every pair:
-  all_on vs raw (+ leave-one-out conditions, if a run has them) -> restyle effect
+  all_on vs raw, all_on vs loo_lighting                         -> restyle, lighting
+  raw_review vs raw, all_on_review vs all_on, all_on vs raw_review -> review x preprocessing
   all_on vs each direct baseline                                 -> vs baselines
   raw    vs each direct baseline                                 -> agent w/o restyle
 Outputs in the run dir:
@@ -123,6 +124,9 @@ def planned_pairs(systems: dict[str, str]) -> list[tuple[str, str]]:
     # leave-one-out conditions were dropped from the camera-ready; their pairs
     # are only judged if such rows exist in the run
     pairs = [("all_on", c) for c in ["raw"] + [f"loo_{a}" for a in LOO]]
+    # review x preprocessing 2x2 (review conditions exist for 20 objects)
+    pairs += [("raw_review", "raw"), ("all_on_review", "all_on"),
+              ("all_on", "raw_review")]
     pairs += [("all_on", f"baseline_{b}") for b in BASELINES]
     pairs += [("raw", f"baseline_{b}") for b in BASELINES]
     return [(a, b) for a, b in pairs if a in systems and b in systems]

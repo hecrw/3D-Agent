@@ -19,17 +19,31 @@ text prompt + condition instruction
 The condition instruction is prepended to the prompt to control which restyle
 axes the agent uses. The agent's choice of backbone is unrestricted.
 
-## Conditions (camera-ready: 2)
+## Conditions
 
-| Condition | Restyle |
-|-----------|---------|
-| `raw` | no restyle — the input image goes straight to the backbone (restyle tool is an identity pass-through) |
-| `all_on` | full restyle prompt (background, framing, view, lighting, isolation, part_visibility) |
+| Condition | Objects | Preprocessing | Review loop |
+|-----------|---------|---------------|-------------|
+| `raw` | all 50 | none (restyle tool is an identity pass-through) | off |
+| `all_on` | all 50 | full restyle prompt | off |
+| `loo_lighting` | all 50 | full restyle prompt **without** the lighting clause | off |
+| `raw_review` | 20 submission objects | none | on |
+| `all_on_review` | 20 submission objects | full restyle prompt | on |
 
-The six leave-one-out conditions (`loo_<axis>`) still exist in `run_pilot.py`
-(`--conditions loo_view …`) but were dropped from the camera-ready: the six
-clauses act on one image edit and are not separable, so the comparison is
-`raw` vs `all_on` on more prompts instead.
+Review loop = the agent's own quality control: it inspects the input image
+(`tool_inspect_image`), generates, scores the mesh with `tool_score_alignment`
+(CLIP, accept >= 0.22) and regenerates when told to — at most 2 regenerations.
+Each regeneration uses a new backbone seed (42, 43, 44), so retrying the same
+image yields a new sample; a requested new concept image also gets a new
+image seed. The final output is the last mesh generated. With the loop off the
+agent is told to stop after the first mesh, and a hard cap of one generation
+is enforced. Every score/verdict the loop saw is logged (`review_scores`,
+`review_verdicts`).
+
+Paired contrasts (`eval/analyze.py`): restyle = `all_on − raw`, lighting =
+`all_on − loo_lighting` (n=50); review with/without preprocessing,
+preprocessing vs review, and their interaction (n=20).
+**The review loop optimises CLIP, so judge its effect on the other metrics
+(ULIP-2, T3Bench, pairwise judge), not on `clip_mean`.**
 
 ## Metrics
 
@@ -74,18 +88,18 @@ First build compiles `pointnet2_ops` and downloads ViT-bigG-14 (~5 GB) + the
 
 ## Dataset
 
-50 prompts from the T3Bench single-object set (arXiv:2310.02977), in T3Bench's
-exact wording: the 20 prompts of the original submission plus 30 drawn at
-random (seed 20261112) from the other 80. Built by
-`eval/dataset/make_prompts.py`; each prompt's id `t3s_NNN` is its line number
-in T3Bench's `data/prompt_single.txt`.
+50 generic object prompts ("a bicycle", "a teapot"; no attributes), built by
+`eval/dataset/make_prompts.py`: object categories from the T3Bench
+single-object prompts reduced to their head object — the 20 objects of the
+original submission plus T3Bench lines in a seeded random order (seed
+20261112), skipping duplicates, until there are 50.
 
-Real photos (retrieved arm) are hand-picked from openly licensed Wikimedia
-Commons candidates under criteria fixed before any results
-(`eval/dataset/curate_photos.py`); source, author and licence of each are in
-`eval/dataset/images/manifest.csv`. The submission's 20 web photos (one was an
-HTML page, several watermarked or cropped) are kept in `images_submission/`
-for reference only.
+Real photos (retrieved arm) are selected automatically, with no human picking,
+by `eval/dataset/curate_photos.py`: the first openly licensed Wikimedia
+Commons result that CLIP ViT-L/14 classifies as "a photo of a {object}"
+(vs drawing / painting / render / close-up of a part / text / something else,
+p >= 0.5). Source, author and licence of each photo are in
+`eval/dataset/images/manifest.csv`.
 
 ## Cost estimate
 

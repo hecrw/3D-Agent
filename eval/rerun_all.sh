@@ -252,7 +252,10 @@ check)
   "$PY" - "$RUN_DIR" <<'EOF'
 import csv, sys, glob, pathlib
 run = pathlib.Path(sys.argv[1]); bad = 0
-caps = [r["caption"] for r in csv.DictReader(open("eval/dataset/captions.csv"))]
+rows_c = list(csv.DictReader(open("eval/dataset/captions.csv")))
+caps = [r["caption"] for r in rows_c]
+review_caps = {r["caption"] for r in rows_c if r.get("source") == "submission"}
+COND = ["raw", "all_on", "loo_lighting", "raw_review", "all_on_review"]
 expected = {"results_generated.csv", "results_retrieved.csv"} | {
     f"results_baseline_{b}_{m}.csv" for b in ("trellis2", "hunyuan3d2", "partcrafter")
     for m in ("retrieved", "generated")}
@@ -262,11 +265,13 @@ for f in sorted(expected - have):
 for f in sorted(have):
     rows = list(csv.DictReader(open(run / f)))
     ok = {(r["prompt"], r["condition"]) for r in rows if r["status"] == "ok"}
-    conds = sorted({r["condition"] for r in rows})
-    missing = [(p, c) for p in caps for c in conds if (p, c) not in ok]
+    conds = ["baseline"] if "baseline" in f else COND
+    # review conditions run on the 20 submission objects only
+    want = [(p, c) for c in conds for p in caps if not c.endswith("_review") or p in review_caps]
+    missing = [(p, c) for p, c in want if (p, c) not in ok]
     noulip = [r for r in rows if r["status"] == "ok" and not r["ulip_mean"]]
     unenf = [r for r in rows if r["status"] == "ok" and r.get("condition_enforced") != "True"]
-    print(f"{f}: ok={len(ok)}/{len(caps)*len(conds)} missing={len(missing)} "
+    print(f"{f}: ok={len(ok)}/{len(want)} missing={len(missing)} "
           f"no_ulip={len(noulip)} not_enforced={len(unenf)}")
     for p, c in missing[:10]: print("   MISSING", c, p)
     bad += len(missing) + len(noulip) + len(unenf)

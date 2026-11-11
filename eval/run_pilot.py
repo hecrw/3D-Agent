@@ -38,6 +38,7 @@ import base64
 import csv
 import json
 import math
+import re
 import os
 import sys
 import time
@@ -150,6 +151,10 @@ _EVAL_STYLE_PROMPT: str | None = None   # None => raw (identity)
 _EVAL_CAPTION: str = ""
 _CONCEPT_CACHE_PATH: Path | None = None  # per (run, prompt) shared concept image
 _TOOL_LOG: list[dict] = []               # what the patched tools actually did
+_REVIEW: bool = False                    # review conditions: agent may score + regenerate
+MAX_GENS_REVIEW = 3                      # 1 generation + at most 2 regenerations
+_GEN_COUNT = 0                           # 3D generation calls in the current cell
+_LAST_MESH: str | None = None
 
 _orig_restyle = tools.restyle_to_objaverse
 _orig_concept = tools.generate_concept_image
@@ -173,6 +178,23 @@ def _eval_concept(prompt, out_path=None):
     import shutil
     out_path = str(out_path or agent._stamp("concept", "png"))
     entry = {"tool": "concept", "agent_prompt": prompt, "used_prompt": _EVAL_CAPTION}
+    n_prev = sum(1 for e in _TOOL_LOG if e.get("tool") == "concept")
+    if _REVIEW and n_prev > 0:
+        # a review retry asked for a NEW concept image: generate one with a
+        # different (logged) seed instead of returning the shared cached image
+        base = int(os.environ.get("GEMINI_SEED", "0") or 0)
+        old = os.environ.get("GEMINI_SEED")
+        os.environ["GEMINI_SEED"] = str(base + n_prev)
+        try:
+            _orig_concept(_EVAL_CAPTION or prompt, out_path=out_path)
+        finally:
+            if old is None:
+                os.environ.pop("GEMINI_SEED", None)
+            else:
+                os.environ["GEMINI_SEED"] = old
+        entry.update(mode="review_regenerated", seed=base + n_prev, path=out_path)
+        _TOOL_LOG.append(entry)
+        return out_path
     if _CONCEPT_CACHE_PATH and _CONCEPT_CACHE_PATH.exists():
         shutil.copyfile(_CONCEPT_CACHE_PATH, out_path)
         entry["mode"] = "cached"
@@ -189,6 +211,47 @@ def _eval_concept(prompt, out_path=None):
 
 agent.restyle_to_objaverse = _eval_restyle
 agent.generate_concept_image = _eval_concept
+
+
+def _wrap_generator(name: str, fn):
+    """Cap 3D generations per cell (1 normally, MAX_GENS_REVIEW in review
+    conditions) and give each retry a NEW seed (default + k): with a fixed
+    seed, "regenerate" from the same image would rebuild the identical mesh.
+    Past the cap the call returns the last mesh unchanged (logged)."""
+    import inspect
+    default_seed = inspect.signature(fn).parameters["seed"].default
+
+    def wrapped(*args, **kwargs):
+        global _GEN_COUNT, _LAST_MESH
+        cap = MAX_GENS_REVIEW if _REVIEW else 1
+        if _GEN_COUNT >= cap and _LAST_MESH:
+            _TOOL_LOG.append({"tool": "generate", "backbone": name, "mode": "capped",
+                              "returned": _LAST_MESH})
+            print(f"[eval] generation cap ({cap}) reached — returning last mesh")
+            return _LAST_MESH
+        kwargs["seed"] = default_seed + _GEN_COUNT
+        _GEN_COUNT += 1
+        out = fn(*args, **kwargs)
+        _LAST_MESH = out
+        _TOOL_LOG.append({"tool": "generate", "backbone": name, "mode": "run",
+                          "seed": kwargs["seed"], "input": kwargs.get("image_path"),
+                          "path": out})
+        return out
+    return wrapped
+
+
+for _n in ("trellis2", "trellis2_texture", "hunyuan3d2", "partcrafter"):
+    setattr(agent, _n, _wrap_generator(_n, getattr(tools, _n)))
+
+_orig_edit = tools.edit_image
+
+
+def _eval_edit(image_path, instruction, out_path=None):
+    _TOOL_LOG.append({"tool": "edit_image", "input": str(image_path), "instruction": instruction})
+    return _orig_edit(image_path, instruction, out_path=out_path)
+
+
+agent.edit_image = _eval_edit
 
 # VLM judge: its own pinned model at temperature 0 (deterministic as the
 # API allows), independent of the agent's sampling temperature.
@@ -214,6 +277,9 @@ CSV_FIELDS = [
     "backbone_seed", "tool_sequence", "n_tool_calls", "n_restyle_calls",
     "n_hitl_interrupts", "condition_enforced", "concept_path",
     "input_image_path", "vlm_score_raw", "reused_mesh", "trace_path",
+    # --- review study ---
+    "review", "n_gen_calls", "n_edit_calls", "n_concept_regens",
+    "review_scores", "review_verdicts",
 ]
 
 GEN_TOOLS = {"tool_trellis2", "tool_trellis2_texture", "tool_hunyuan3d2",
@@ -245,10 +311,22 @@ def conditions() -> list[tuple[str, str | None]]:
     for ax in _ALL_AXES:
         remaining = [a for a in _ALL_AXES if a != ax]
         conds.append((f"loo_{ax}", _instruction(remaining)))
+    # review study (2x2 with raw / all_on): same preprocessing, but the agent's
+    # review loop is ON (inspect input, score result, regenerate if needed)
+    conds.append(("raw_review", None))
+    conds.append(("all_on_review", None))
     return conds
 
 
+def base_condition(cond: str) -> str:
+    return cond.removesuffix("_review")
+
+
+REVIEW_SUBSET = "submission"   # review conditions run only on these objects
+
+
 STYLE_PROMPTS: dict[str, str] = {"all_on": tools.build_restyle_prompt(_ALL_AXES)}
+STYLE_PROMPTS["all_on_review"] = STYLE_PROMPTS["all_on"]
 for _ax in _ALL_AXES:
     STYLE_PROMPTS[f"loo_{_ax}"] = tools.build_restyle_prompt(
         [a for a in _ALL_AXES if a != _ax])
@@ -388,7 +466,7 @@ def _score_ulip(mesh_path: str, caption: str) -> float:
 # ---------------------------------------------------------------------------
 
 def load_captions() -> list[tuple[str, str]]:
-    """Returns list of (filename_stem, caption) in CSV order."""
+    """Returns list of (filename, caption) in CSV order."""
     if not CAPTIONS_CSV.exists():
         sys.exit(f"missing {CAPTIONS_CSV}")
     rows = []
@@ -396,6 +474,13 @@ def load_captions() -> list[tuple[str, str]]:
         for row in csv.DictReader(fh):
             rows.append((row["filename"].strip(), row["caption"].strip()))
     return rows
+
+
+def review_subset() -> set[str]:
+    """Filenames of the objects the review conditions run on."""
+    with open(CAPTIONS_CSV, newline="") as fh:
+        return {r["filename"].strip() for r in csv.DictReader(fh)
+                if r.get("source", "").strip() == REVIEW_SUBSET}
 
 
 def ensure_retrieved_photos(captions: list[tuple[str, str]]) -> None:
@@ -510,7 +595,7 @@ def _run_agent(user_message: str, tag: str = "") -> dict:
 def _extract_trace(session_id: str, interrupts: list[dict]) -> dict:
     """Pull the full tool-call trace + resolved model versions out of the
     LangGraph checkpoint for this thread (the stream hides tool args)."""
-    calls, models = [], []
+    calls, models, results = [], [], []
     try:
         state = agent.agent.get_state(agent._thread_config(session_id))
         for m in state.values.get("messages", []):
@@ -520,11 +605,14 @@ def _extract_trace(session_id: str, interrupts: list[dict]) -> dict:
                 models.append(mv)
             for tc in getattr(m, "tool_calls", None) or []:
                 calls.append({"name": tc.get("name"), "args": tc.get("args")})
+            if getattr(m, "type", "") == "tool":
+                content = m.content if isinstance(m.content, str) else str(m.content)
+                results.append({"name": getattr(m, "name", ""), "content": content[:400]})
     except Exception as e:  # noqa: BLE001
         calls.append({"name": "__trace_error__", "args": repr(e)})
     return {"session_id": session_id, "tool_calls": calls,
             "models_resolved": sorted(set(models)), "interrupts": interrupts,
-            "tool_log": list(_TOOL_LOG)}
+            "tool_log": list(_TOOL_LOG), "tool_results": results}
 
 
 def _backbone_info(trace: dict) -> dict:
@@ -617,6 +705,21 @@ def _fill_provenance(row: dict, trace: dict, cond_name: str,
     row["n_hitl_interrupts"] = str(len(trace.get("interrupts", [])))
     row["concept_path"] = concepts[-1]["path"] if concepts else ""
     row.update(_backbone_info(trace))
+    gens = [e for e in log if e.get("tool") == "generate" and e.get("mode") == "run"]
+    row["n_gen_calls"] = str(len(gens))
+    row["n_edit_calls"] = str(sum(1 for e in log if e.get("tool") == "edit_image"))
+    row["n_concept_regens"] = str(sum(1 for e in log if e.get("mode") == "review_regenerated"))
+    scores, verdicts = [], []
+    for r in trace.get("tool_results", []):
+        if r.get("name") == "tool_score_alignment":
+            m1 = re.search(r"Alignment score:\s*([\d.]+)", r["content"])
+            m2 = re.search(r"next_action:\s*(\w+)", r["content"])
+            scores.append(m1.group(1) if m1 else "?")
+            verdicts.append(m2.group(1) if m2 else "?")
+    row["review_scores"] = ";".join(scores)
+    row["review_verdicts"] = ";".join(verdicts)
+    row["review"] = str(cond_name.endswith("_review"))
+    cond_name = base_condition(cond_name)
     # Was the condition actually applied to the image the backbone received?
     if cond_name == "raw":
         ok = all(e["mode"] == "identity(raw)" for e in restyles)
@@ -632,6 +735,9 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
             style_prompt: str | None = None, concept_cache: Path | None = None,
             prov: dict | None = None) -> dict:
     global _EVAL_TAG, _EVAL_STYLE_PROMPT, _EVAL_CAPTION, _CONCEPT_CACHE_PATH
+    global _REVIEW, _GEN_COUNT, _LAST_MESH
+    _REVIEW = cond_name.endswith("_review")
+    _GEN_COUNT, _LAST_MESH = 0, None
     _EVAL_TAG = tag  # the patched agent._stamp() reads this to name media
     _EVAL_STYLE_PROMPT = style_prompt
     _EVAL_CAPTION = caption
@@ -674,10 +780,21 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
                         "\n[EVAL] Generate the concept image from this EXACT "
                         "prompt verbatim — add NO extra detail, style, lighting, "
                         f"background, or framing terms: {caption}")
+            # Review conditions replace the STOP directive with the agent's
+            # review loop; the cap/seed logic is enforced in _wrap_generator.
+            review = (
+                "[EVAL] REVIEW MODE: before sending an image to a 3D tool, check it "
+                "with tool_inspect_image. After the 3D model (.glb) is generated, "
+                f"call tool_score_alignment on it with the prompt \"{caption}\". "
+                "If it recommends 'regenerate', fix the likely cause (for example a "
+                "better or edited input image, or a different 3D tool) and generate "
+                "again, then score again — at most 2 regenerations in total. Do NOT "
+                "re-texture. Finish by reporting the final .glb path.")
+            lead = review if _REVIEW else stop
             # NOTE: `instruction` is deliberately NOT put in the message — the
             # condition is enforced at the tool layer, so the agent sees the
-            # same text in every condition.
-            message = f"{stop}{verbatim}{upload}\n\nGenerate a 3D model of: {caption}"
+            # same text in every condition of the same review setting.
+            message = f"{lead}{verbatim}{upload}\n\nGenerate a 3D model of: {caption}"
             _TOOL_LOG.clear()
             produced = _run_agent(message, tag)
             if produced.get("mesh"):
@@ -749,11 +866,13 @@ def main() -> None:
                          "(default). photo: feed a hand-supplied real photo from "
                          "eval/dataset/images/<filename>. retrieved: auto-fetch a "
                          "real web photo per prompt (Tavily) and cache it there.")
-    ap.add_argument("--conditions", nargs="+", default=["raw", "all_on"],
+    ap.add_argument("--conditions", nargs="+",
+                    default=["raw", "all_on", "loo_lighting", "raw_review", "all_on_review"],
                     metavar="COND",
-                    help="conditions to run. Default: raw all_on (the paper's "
-                         "comparison). The leave-one-out loo_<axis> conditions "
-                         "still exist but were dropped from the camera-ready.")
+                    help="conditions to run. Default: raw, all_on, loo_lighting "
+                         "(full restyle minus the lighting clause) on every object, "
+                         "plus raw_review and all_on_review (agent review loop on) "
+                         "on the 20 submission objects only.")
     ap.add_argument("--auto-retrieve", action="store_true",
                     help="retrieved mode: auto-fetch a web photo (Tavily) for "
                          "prompts with no curated photo. Off by default.")
@@ -799,7 +918,12 @@ def main() -> None:
             sys.exit(f"unknown condition(s): {unknown}; valid: {sorted(valid)}")
         conds = [(c, i) for c, i in conds if c in args.conditions]
     done  = load_done(args.out)
-    total = len(captions) * len(conds)
+    subset = review_subset()
+
+    def runs(filename: str, cond: str) -> bool:
+        return not cond.endswith("_review") or filename in subset
+
+    total = sum(runs(f, c) for f, _ in captions for c, _ in conds)
     print(f"{len(captions)} prompts x {len(conds)} conditions = {total} runs "
           f"({len(done)} already done)")
 
@@ -816,6 +940,8 @@ def main() -> None:
         for filename, caption in captions:
             stem = Path(filename).stem  # e.g. bicycle_01
             for cond_name, instruction in conds:
+                if not runs(filename, cond_name):
+                    continue
                 i += 1
                 key = (caption, cond_name)
                 if key in done:
@@ -828,7 +954,7 @@ def main() -> None:
                           "retrieved": "ret_"}[args.input]
                 tag = f"{run_id}_{prefix}{stem}__{cond_name}"
                 photo_path = str(IMAGES_DIR / filename) if photo_mode else None
-                style = None if cond_name == "raw" else STYLE_PROMPTS[cond_name]
+                style = None if base_condition(cond_name) == "raw" else STYLE_PROMPTS[cond_name]
                 prov = {"run_id": run_id, "input_mode": args.input, "stem": stem,
                         "agent_model": agent.AGENT_LLM_MODEL,
                         "judge_model": JUDGE_MODEL,
