@@ -76,7 +76,18 @@ def build_restyle_prompt(axes: "list[str] | None" = None) -> str:
 
 OBJAVERSE_STYLE_PROMPT = build_restyle_prompt()
 
-GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
+GEMINI_IMAGE_MODEL = os.environ.get("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+
+
+def _image_config() -> "types.GenerateContentConfig":
+    """Config for every Gemini image call. GEMINI_SEED (if set) is passed as the
+    sampling seed — best-effort determinism; Gemini does not guarantee identical
+    outputs for a fixed seed, so the eval also caches the images it produced."""
+    seed = os.environ.get("GEMINI_SEED")
+    return types.GenerateContentConfig(
+        response_modalities=["IMAGE"],
+        seed=int(seed) if seed not in (None, "") else None,
+    )
 
 
 _gemini_client: Optional[genai.Client] = None
@@ -117,7 +128,7 @@ def generate_concept_image(prompt: str,
     resp = _gemini().models.generate_content(
         model=GEMINI_IMAGE_MODEL,
         contents=prompt,
-        config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+        config=_image_config(),
     )
     data = _extract_image_bytes(resp)
     if not data:
@@ -141,7 +152,7 @@ def restyle_to_objaverse(image_path: str | Path,
     resp = _gemini().models.generate_content(
         model=GEMINI_IMAGE_MODEL,
         contents=[src, style_prompt],
-        config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+        config=_image_config(),
     )
     data = _extract_image_bytes(resp)
     if not data:
@@ -168,7 +179,7 @@ def edit_image(image_path: str | Path,
     resp = _gemini().models.generate_content(
         model=GEMINI_IMAGE_MODEL,
         contents=[src, instruction],
-        config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+        config=_image_config(),
     )
     data = _extract_image_bytes(resp)
     if not data:

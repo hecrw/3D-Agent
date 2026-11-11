@@ -13,12 +13,23 @@ and appends one row to a CSV. Already-present rows are skipped so the sweep is
 resumable after a crash.
 
 Run from the repo root:
-    .venv/bin/python eval/run_pilot.py --limit 10 --out eval/results_pilot.csv
+    .venv/bin/python eval/run_pilot.py --run-id R1 --input retrieved
 
-Flags:
-    --limit N       process only the first N prompts (0 = all)
-    --out PATH      output CSV path (default: eval/results_pilot.csv)
-    --no-gen3deval  skip the Claude Haiku scoring call (saves API cost)
+Outputs go to eval/runs/<run-id>/ (results_<input>.csv, run_meta.json,
+traces/, concepts/). Rerunning the same --run-id resumes; a NEW --run-id never
+reuses meshes or images from another run.
+
+Integrity guarantees (rerun for camera-ready, 2026-11):
+  * The condition's restyle prompt is ENFORCED at the tool layer: the agent's
+    tool_restyle_to_objaverse has no style argument, so before this fix every
+    restyled condition silently used the all-on default prompt. `raw` makes
+    the restyle tool an identity pass-through.
+  * The user message sent to the agent is IDENTICAL across conditions, so any
+    routing difference comes from the image, not the instruction text.
+  * Generated mode: one concept image per prompt per run, shared by all 8
+    conditions (paired design) and generated from the verbatim caption.
+  * Every row logs run id, pinned + resolved model versions, seeds, the full
+    tool-call trace (routing decision, endpoint, args) and HITL interrupts.
 """
 from __future__ import annotations
 
@@ -128,17 +139,85 @@ def _eval_stamp(prefix: str, ext: str) -> str:
 
 agent._stamp = _eval_stamp
 
+# ---------------------------------------------------------------------------
+# Condition enforcement at the tool layer
+# ---------------------------------------------------------------------------
+# agent.tool_restyle_to_objaverse(image_path) calls the module-level name
+# agent.restyle_to_objaverse with the DEFAULT (all-on) prompt and the agent has
+# no way to pass a different one. So we patch that binding: it uses the
+# current condition's prompt, or is an identity pass-through for `raw`.
+_EVAL_STYLE_PROMPT: str | None = None   # None => raw (identity)
+_EVAL_CAPTION: str = ""
+_CONCEPT_CACHE_PATH: Path | None = None  # per (run, prompt) shared concept image
+_TOOL_LOG: list[dict] = []               # what the patched tools actually did
+
+_orig_restyle = tools.restyle_to_objaverse
+_orig_concept = tools.generate_concept_image
+
+
+def _eval_restyle(image_path, out_path=None, style_prompt=None):
+    if _EVAL_STYLE_PROMPT is None:
+        _TOOL_LOG.append({"tool": "restyle", "mode": "identity(raw)",
+                          "input": str(image_path)})
+        print(f"[eval] raw condition: restyle is identity for {image_path}")
+        return str(image_path)
+    _TOOL_LOG.append({"tool": "restyle", "mode": "enforced",
+                      "input": str(image_path), "prompt": _EVAL_STYLE_PROMPT})
+    return _orig_restyle(image_path, out_path=out_path,
+                         style_prompt=_EVAL_STYLE_PROMPT)
+
+
+def _eval_concept(prompt, out_path=None):
+    """Concept generation pinned to the verbatim caption and shared across all
+    conditions of a prompt within a run (paired design)."""
+    import shutil
+    out_path = str(out_path or agent._stamp("concept", "png"))
+    entry = {"tool": "concept", "agent_prompt": prompt, "used_prompt": _EVAL_CAPTION}
+    if _CONCEPT_CACHE_PATH and _CONCEPT_CACHE_PATH.exists():
+        shutil.copyfile(_CONCEPT_CACHE_PATH, out_path)
+        entry["mode"] = "cached"
+    else:
+        _orig_concept(_EVAL_CAPTION or prompt, out_path=out_path)
+        if _CONCEPT_CACHE_PATH:
+            _CONCEPT_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(out_path, _CONCEPT_CACHE_PATH)
+        entry["mode"] = "generated"
+    entry["path"] = out_path
+    _TOOL_LOG.append(entry)
+    return out_path
+
+
+agent.restyle_to_objaverse = _eval_restyle
+agent.generate_concept_image = _eval_concept
+
+# Gen3DEval judge: its own pinned model at temperature 0 (deterministic as the
+# API allows), independent of the agent's sampling temperature.
+from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: E402
+JUDGE_MODEL = os.environ.get("JUDGE_MODEL", agent.AGENT_LLM_MODEL)
+judge_llm = ChatGoogleGenerativeAI(model=JUDGE_MODEL, temperature=0.0)
+
 DATASET_DIR  = REPO_ROOT / "eval" / "dataset"
 IMAGES_DIR   = DATASET_DIR / "images"   # real photos for --input photo mode
 CAPTIONS_CSV = DATASET_DIR / "captions.csv"
 WORK_DIR     = REPO_ROOT / "eval" / "work"
+RUNS_DIR     = REPO_ROOT / "eval" / "runs"
 
 CSV_FIELDS = [
     "prompt", "condition",
     "clip_mean", "clip_accept", "worst_view", "per_view",
     "gen3deval", "ulip_mean",
     "restyled_path", "mesh_path", "status", "error", "seconds",
+    # --- provenance (added for camera-ready rerun) ---
+    "run_id", "input_mode", "stem", "started_at",
+    "agent_model", "agent_model_resolved", "judge_model", "image_model",
+    "gemini_seed", "backbone_tool", "backbone_endpoint", "backbone_args",
+    "backbone_seed", "tool_sequence", "n_tool_calls", "n_restyle_calls",
+    "n_hitl_interrupts", "condition_enforced", "concept_path",
+    "input_image_path", "gen3deval_raw", "reused_mesh", "trace_path",
 ]
+
+GEN_TOOLS = {"tool_trellis2", "tool_trellis2_texture", "tool_hunyuan3d2",
+             "tool_partcrafter"}
 
 # ---------------------------------------------------------------------------
 # Condition → agent instruction
@@ -169,11 +248,88 @@ def conditions() -> list[tuple[str, str | None]]:
     return conds
 
 
+STYLE_PROMPTS: dict[str, str] = {"all_on": tools.build_restyle_prompt(_ALL_AXES)}
+for _ax in _ALL_AXES:
+    STYLE_PROMPTS[f"loo_{_ax}"] = tools.build_restyle_prompt(
+        [a for a in _ALL_AXES if a != _ax])
+
+
+def _write_run_meta(run_dir: Path, run_id: str, args) -> None:
+    """Everything needed to reproduce / audit the run, written once per run
+    (a resumed run appends a new entry instead of overwriting)."""
+    import hashlib
+    import platform
+    import subprocess
+    from importlib import metadata
+
+    def _git(*a):
+        try:
+            return subprocess.run(["git", *a], cwd=REPO_ROOT, capture_output=True,
+                                  text=True, timeout=10).stdout.strip()
+        except Exception:  # noqa: BLE001
+            return ""
+
+    pkgs = {}
+    for name in ("langchain", "langgraph", "langchain-google-genai", "google-genai",
+                 "torch", "open_clip_torch", "transformers", "trimesh", "pyrender"):
+        try:
+            pkgs[name] = metadata.version(name)
+        except Exception:  # noqa: BLE001
+            pkgs[name] = None
+    # resolve what the pinned agent model actually serves today
+    resolved = None
+    try:
+        r = tools._gemini().models.generate_content(
+            model=agent.AGENT_LLM_MODEL, contents="Reply with: ok")
+        resolved = r.model_version
+    except Exception as e:  # noqa: BLE001
+        resolved = f"error: {e}"
+    local_trellis = os.environ.get("LOCAL_TRELLIS_URL")
+    trellis_health = None
+    if local_trellis:
+        try:
+            import requests
+            trellis_health = requests.get(local_trellis + "/", timeout=10).text[:300]
+        except Exception as e:  # noqa: BLE001
+            trellis_health = f"error: {e}"
+    meta = {
+        "run_id": run_id,
+        "written_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "argv": sys.argv,
+        "input_mode": args.input,
+        "git_commit": _git("rev-parse", "HEAD"),
+        "git_dirty_files": [l for l in _git("status", "--porcelain").splitlines()
+                            if l.endswith(".py")],
+        "agent_model": agent.AGENT_LLM_MODEL,
+        "agent_model_resolved": resolved,
+        "agent_temperature": agent.AGENT_LLM_TEMPERATURE,
+        "judge_model": JUDGE_MODEL,
+        "judge_temperature": 0.0,
+        "image_model": tools.GEMINI_IMAGE_MODEL,
+        "gemini_seed": os.environ.get("GEMINI_SEED"),
+        "clip_accept_threshold": 0.22,
+        "local_trellis_url_set": bool(local_trellis),
+        "local_trellis_health": trellis_health,
+        "style_prompts": STYLE_PROMPTS,
+        "captions_sha1": hashlib.sha1(CAPTIONS_CSV.read_bytes()).hexdigest(),
+        "python": sys.version,
+        "platform": platform.platform(),
+        "packages": pkgs,
+    }
+    path = run_dir / "run_meta.json"
+    history = json.loads(path.read_text()) if path.exists() else []
+    history.append(meta)
+    path.write_text(json.dumps(history, indent=1))
+    print(f"[run] {run_id}  agent={agent.AGENT_LLM_MODEL} (resolves to {resolved})  "
+          f"judge={JUDGE_MODEL}  image={tools.GEMINI_IMAGE_MODEL}")
+
+
 # ---------------------------------------------------------------------------
 # Scoring helpers
 # ---------------------------------------------------------------------------
 
-def _score_gen3deval(view_paths: list[str], caption: str) -> float:
+def _score_gen3deval(view_paths: list[str], caption: str,
+                     raw_out: dict | None = None) -> float:
     """VLM-as-judge quality score 1–10 using the agent's Gemini model.
 
     Uses agent.llm (the same vision-capable Gemini that tool_inspect_image
@@ -198,11 +354,13 @@ def _score_gen3deval(view_paths: list[str], caption: str) -> float:
             "image_url": f"data:image/png;base64,{b64}",
         })
     try:
-        resp = agent.llm.invoke([HumanMessage(content=content)])
+        resp = judge_llm.invoke([HumanMessage(content=content)])
         raw = resp.content
         text = (raw if isinstance(raw, str)
                 else "".join(b.get("text", "") for b in raw
                              if isinstance(b, dict)))
+        if raw_out is not None:
+            raw_out["text"] = text.strip()[:200]
         m = re.search(r"\d+(?:\.\d+)?", text)  # robust to extra words
         if not m:
             return math.nan
@@ -310,7 +468,7 @@ def _newest_after(pattern: str, since: float) -> str | None:
     return max(candidates)[1]
 
 
-def _run_agent(user_message: str) -> dict[str, str | None]:
+def _run_agent(user_message: str, tag: str = "") -> dict:
     """Drive the agent and return {'mesh': path, 'restyled': path}.
 
     Auto-approves HITL gates so the eval runs unattended. Detects the produced
@@ -322,19 +480,78 @@ def _run_agent(user_message: str) -> dict[str, str | None]:
     # for filesystem timestamp granularity.
     since = time.time() - 1.0
 
+    interrupts: list[dict] = []
+
     def _consume(stream) -> None:
         for event in stream:
             if event.get("type") == "interrupt":
+                interrupts.append({k: event.get(k) for k in
+                                   ("tool", "image_path", "allowed_decisions")})
                 requests = event.get("action_requests", [])
                 decisions = [{"type": "approve"} for _ in requests] or [{"type": "approve"}]
                 _consume(resume_chat_stream(session_id, decisions))
                 return
 
     _consume(process_chat_stream(user_message, [], session_id=session_id))
+    # Match on this cell's tag (not just "newest file") so two sweeps running
+    # in parallel on one box (e.g. generated + retrieved arms on separate
+    # GPUs) can never pick up each other's meshes.
+    t = f"_{tag}_" if tag else "_"
     return {
-        "mesh": _newest_after("*.glb", since),
-        "restyled": _newest_after("objaverse_*.png", since),
+        "mesh": _newest_after(f"*{t}*.glb", since),
+        "restyled": _newest_after(f"objaverse{t}*.png", since),
+        "trace": _extract_trace(session_id, interrupts),
     }
+
+
+def _extract_trace(session_id: str, interrupts: list[dict]) -> dict:
+    """Pull the full tool-call trace + resolved model versions out of the
+    LangGraph checkpoint for this thread (the stream hides tool args)."""
+    calls, models = [], []
+    try:
+        state = agent.agent.get_state(agent._thread_config(session_id))
+        for m in state.values.get("messages", []):
+            meta = getattr(m, "response_metadata", None) or {}
+            mv = meta.get("model_version") or meta.get("model_name")
+            if mv:
+                models.append(mv)
+            for tc in getattr(m, "tool_calls", None) or []:
+                calls.append({"name": tc.get("name"), "args": tc.get("args")})
+    except Exception as e:  # noqa: BLE001
+        calls.append({"name": "__trace_error__", "args": repr(e)})
+    return {"session_id": session_id, "tool_calls": calls,
+            "models_resolved": sorted(set(models)), "interrupts": interrupts,
+            "tool_log": list(_TOOL_LOG)}
+
+
+def _backbone_info(trace: dict) -> dict:
+    """Routing decision = the LAST 3D-generation tool call the agent made."""
+    import inspect
+    gen = [c for c in trace.get("tool_calls", []) if c["name"] in GEN_TOOLS]
+    if not gen:
+        return {}
+    c = gen[-1]
+    args = c.get("args") or {}
+    name = c["name"]
+    if name == "tool_trellis2":
+        ep = (os.environ.get("LOCAL_TRELLIS_URL", "") or tools.TRELLIS_GEN_URL) + "/generate"
+        fn = tools.trellis2
+    elif name == "tool_trellis2_texture":
+        ep, fn = tools.TRELLIS_TEX_URL + "/texture", tools.trellis2_texture
+    elif name == "tool_hunyuan3d2":
+        ep, fn = tools.HUNYUAN3D2_GEN_URL + "/generate", tools.hunyuan3d2
+    else:
+        ep = (tools.PARTCRAFTER_SCENE_URL + "/generate-scene" if args.get("scene")
+              else tools.PARTCRAFTER_OBJ_URL + "/generate")
+        fn = tools.partcrafter
+    seed = inspect.signature(fn).parameters.get("seed")
+    # strip the workspace host so the CSV doesn't leak the account name
+    ep_short = ep.split(".modal.run")[-1] if ".modal.run" in ep else ep
+    return {"backbone_tool": name.replace("tool_", ""),
+            "backbone_endpoint": f"{name.replace('tool_', '')}:{ep_short}",
+            "backbone_args": json.dumps(args),
+            "backbone_seed": "" if seed is None else str(seed.default),
+            "input_image_path": args.get("image_path", "")}
 
 
 def _existing_artifacts(tag: str) -> dict[str, str | None]:
@@ -381,29 +598,59 @@ def _existing_input_image(tag: str, cond_name: str,
     return None, None
 
 
+_SKIP_GEN3DEVAL = False
+
+
+def _fill_provenance(row: dict, trace: dict, cond_name: str,
+                     style_prompt: str | None, mesh: str | None) -> None:
+    calls = trace.get("tool_calls", [])
+    log = trace.get("tool_log", [])
+    restyles = [e for e in log if e.get("tool") == "restyle"]
+    concepts = [e for e in log if e.get("tool") == "concept"]
+    row["agent_model_resolved"] = ";".join(trace.get("models_resolved", []))
+    row["tool_sequence"] = ">".join(c["name"].replace("tool_", "") for c in calls)
+    row["n_tool_calls"] = str(len(calls))
+    row["n_restyle_calls"] = str(len(restyles))
+    row["n_hitl_interrupts"] = str(len(trace.get("interrupts", [])))
+    row["concept_path"] = concepts[-1]["path"] if concepts else ""
+    row.update(_backbone_info(trace))
+    # Was the condition actually applied to the image the backbone received?
+    if cond_name == "raw":
+        ok = all(e["mode"] == "identity(raw)" for e in restyles)
+    else:
+        ok = bool(restyles) and all(e.get("prompt") == style_prompt for e in restyles)
+    row["condition_enforced"] = str(ok)
+    if mesh:
+        row["trace_path"] = str(Path(mesh).with_suffix(".trace.json"))
+
+
 def run_one(caption: str, cond_name: str, instruction: str | None,
-            tag: str = "", photo_path: str | None = None) -> dict:
-    global _EVAL_TAG
+            tag: str = "", photo_path: str | None = None,
+            style_prompt: str | None = None, concept_cache: Path | None = None,
+            prov: dict | None = None) -> dict:
+    global _EVAL_TAG, _EVAL_STYLE_PROMPT, _EVAL_CAPTION, _CONCEPT_CACHE_PATH
     _EVAL_TAG = tag  # the patched agent._stamp() reads this to name media
+    _EVAL_STYLE_PROMPT = style_prompt
+    _EVAL_CAPTION = caption
+    _CONCEPT_CACHE_PATH = concept_cache
     row = {f: "" for f in CSV_FIELDS}
-    row.update(prompt=caption, condition=cond_name)
+    row.update(prompt=caption, condition=cond_name, **(prov or {}))
+    row["started_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     t0 = time.time()
     try:
         # Reuse an existing mesh for this cell if a prior (crashed) run already
         # generated one — skips the expensive concept/restyle/backbone steps.
+        # Reuse ONLY a mesh from this same run (tag carries the run id) whose
+        # trace sidecar exists — i.e. a cell whose generation finished but
+        # whose scoring crashed. Never force a backbone: that would override
+        # the agent's routing decision (the old trellis2-only fallback did).
         produced = _existing_artifacts(tag) if tag else {"mesh": None}
-        if produced["mesh"]:
-            print(f"    reusing existing mesh {Path(produced['mesh']).name}")
-        elif tag and _existing_input_image(tag, cond_name, photo_path)[0]:
-            # No mesh, but the concept/restyled/retrieved image already exists:
-            # skip the Gemini concept + restyle calls and just run the backbone.
-            inp, kind = _existing_input_image(tag, cond_name, photo_path)
-            print(f"    reusing existing {kind} image {Path(inp).name} "
-                  f"-> backbone only")
-            out_glb = str(agent.OUT / f"trellis2_{tag}_{int(time.time()*1000)}.glb")
-            mesh = tools.trellis2(inp, out_path=out_glb)
-            produced = {"mesh": mesh,
-                        "restyled": inp if kind == "restyled" else ""}
+        sidecar = (Path(produced["mesh"]).with_suffix(".trace.json")
+                   if produced.get("mesh") else None)
+        if sidecar and sidecar.exists():
+            print(f"    reusing this run's mesh {Path(produced['mesh']).name}")
+            produced["trace"] = json.loads(sidecar.read_text())
+            row["reused_mesh"] = "True"
         else:
             # Build the user message. The eval instruction sets the restyle axes
             # for this condition; the STOP directive keeps the pipeline fixed
@@ -424,10 +671,18 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
                         "\n[EVAL] Generate the concept image from this EXACT "
                         "prompt verbatim — add NO extra detail, style, lighting, "
                         f"background, or framing terms: {caption}")
-            base = f"{instruction}\n{stop}" if instruction else stop
-            message = f"{base}{verbatim}{upload}\n\nGenerate a 3D model of: {caption}"
-            produced = _run_agent(message)
+            # NOTE: `instruction` is deliberately NOT put in the message — the
+            # condition is enforced at the tool layer, so the agent sees the
+            # same text in every condition.
+            message = f"{stop}{verbatim}{upload}\n\nGenerate a 3D model of: {caption}"
+            _TOOL_LOG.clear()
+            produced = _run_agent(message, tag)
+            if produced.get("mesh"):
+                Path(produced["mesh"]).with_suffix(".trace.json").write_text(
+                    json.dumps(produced["trace"], indent=1, default=str))
 
+        trace = produced.get("trace") or {}
+        _fill_provenance(row, trace, cond_name, style_prompt, mesh=produced.get("mesh"))
         mesh = produced["mesh"]
         if not mesh:
             raise RuntimeError("agent did not produce a .glb mesh")
@@ -449,8 +704,13 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
         )
 
         # Gen3DEval
-        gen3d = _score_gen3deval(view_paths, caption)
+        if _SKIP_GEN3DEVAL:
+            gen3d, raw = math.nan, {}
+        else:
+            raw = {}
+            gen3d = _score_gen3deval(view_paths, caption, raw_out=raw)
         row["gen3deval"] = "" if math.isnan(gen3d) else f"{gen3d:.1f}"
+        row["gen3deval_raw"] = raw.get("text", "")
 
         # ULIP-2 (point-cloud↔text, scored from the mesh on Modal GPU)
         ulip = _score_ulip(mesh, caption)
@@ -470,7 +730,12 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--out", default="eval/results_pilot.csv", type=Path)
+    ap.add_argument("--run-id", default=None,
+                    help="run identifier; outputs go to eval/runs/<run-id>/. "
+                         "Reuse the same id to resume. Default: timestamp.")
+    ap.add_argument("--out", default=None, type=Path,
+                    help="override output CSV (default: "
+                         "eval/runs/<run-id>/results_<input>.csv)")
     ap.add_argument("--limit", type=int, default=0,
                     help="max prompts to process (0 = all)")
     ap.add_argument("--no-gen3deval", action="store_true",
@@ -487,6 +752,15 @@ def main() -> None:
                          "all_on (just the headline comparison = 2 gens/prompt). "
                          "Default: all 8 (raw, all_on, 6x loo_*).")
     args = ap.parse_args()
+
+    global _SKIP_GEN3DEVAL
+    _SKIP_GEN3DEVAL = args.no_gen3deval
+    run_id = args.run_id or time.strftime("run_%Y%m%d_%H%M%S")
+    run_dir = RUNS_DIR / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if args.out is None:
+        args.out = run_dir / f"results_{args.input}.csv"
+    _write_run_meta(run_dir, run_id, args)
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     captions = load_captions()
@@ -539,23 +813,31 @@ def main() -> None:
                     print(f"[{i}/{total}] skip (done) {caption!r} | {cond_name}")
                     continue
                 print(f"[{i}/{total}] {caption!r} | {cond_name}")
-                if args.no_gen3deval:
-                    # monkey-patch scorer to skip API calls
-                    import eval.run_pilot as _self  # noqa: PLC0415
-                    _self._score_gen3deval = lambda *_: math.nan  # type: ignore[assignment]
-                # Mode-prefixed tag so each input mode's media/meshes never
-                # collide with or get reused from another mode's run.
-                prefix = {"generated": "", "photo": "photo_",
+                # Run- and mode-prefixed tag so media/meshes never collide
+                # with or get reused from another run or input mode.
+                prefix = {"generated": "gen_", "photo": "photo_",
                           "retrieved": "ret_"}[args.input]
-                tag = f"{prefix}{stem}__{cond_name}"  # e.g. ret_bicycle_01__loo_view
+                tag = f"{run_id}_{prefix}{stem}__{cond_name}"
                 photo_path = str(IMAGES_DIR / filename) if photo_mode else None
+                style = None if cond_name == "raw" else STYLE_PROMPTS[cond_name]
+                prov = {"run_id": run_id, "input_mode": args.input, "stem": stem,
+                        "agent_model": agent.AGENT_LLM_MODEL,
+                        "judge_model": JUDGE_MODEL,
+                        "image_model": tools.GEMINI_IMAGE_MODEL,
+                        "gemini_seed": os.environ.get("GEMINI_SEED", "")}
                 row = run_one(caption, cond_name, instruction,
-                              tag=tag, photo_path=photo_path)
+                              tag=tag, photo_path=photo_path,
+                              style_prompt=style,
+                              concept_cache=(run_dir / "concepts" / f"{stem}.png"
+                                             if not photo_mode else None),
+                              prov=prov)
                 writer.writerow(row)
                 fh.flush()
                 print(f"    -> {row['status']}  "
                       f"clip={row['clip_mean']}  "
                       f"gen3d={row['gen3deval']}  "
+                      f"backbone={row['backbone_tool']}  "
+                      f"enforced={row['condition_enforced']}  "
                       f"({row['seconds']}s)")
     print(f"done -> {args.out}")
 

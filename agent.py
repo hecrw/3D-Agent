@@ -355,9 +355,14 @@ def _friendly_status(line: str):
 
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+# Pinned model ID (NOT the floating "gemini-flash-latest" alias) so runs are
+# reproducible. On 2026-11-11 the alias resolved to gemini-3.8-flash. Override
+# with AGENT_LLM_MODEL; the eval logs the resolved version per row.
+AGENT_LLM_MODEL = os.environ.get("AGENT_LLM_MODEL", "gemini-3.8-flash")
+AGENT_LLM_TEMPERATURE = float(os.environ.get("AGENT_LLM_TEMPERATURE", "0.2"))
 llm = ChatGoogleGenerativeAI(
-    model="gemini-flash-latest", 
-    temperature=0.2
+    model=AGENT_LLM_MODEL,
+    temperature=AGENT_LLM_TEMPERATURE,
 )
 
 from langchain.agents import create_agent
@@ -389,7 +394,8 @@ GATED_TOOLS = {
 import sqlite3
 from django.conf import settings as _dj_settings
 
-_CKPT_PATH = str(Path(_dj_settings.BASE_DIR) / "agent_checkpoints.sqlite3")
+# AGENT_CKPT_PATH lets parallel eval sweeps use separate DBs (no sqlite lock fights).
+_CKPT_PATH = os.environ.get("AGENT_CKPT_PATH") or str(Path(_dj_settings.BASE_DIR) / "agent_checkpoints.sqlite3")
 _ckpt_conn = sqlite3.connect(_CKPT_PATH, check_same_thread=False)
 checkpointer = SqliteSaver(_ckpt_conn)
 checkpointer.setup()

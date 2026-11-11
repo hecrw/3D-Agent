@@ -53,9 +53,17 @@ def main() -> None:
 
     app = FastAPI()
 
+    import subprocess
+    import torch
+    _commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                             capture_output=True, text=True).stdout.strip()
+    _info = {"status": "ok", "model": "microsoft/TRELLIS.2-4B",
+             "repo_commit": _commit, "torch": torch.__version__,
+             "cuda": torch.version.cuda, "gpu": torch.cuda.get_device_name(0)}
+
     @app.get("/")
     def health():
-        return {"status": "ok", "model": "TRELLIS.2-4B"}
+        return _info
 
     @app.post("/generate")
     async def generate(
@@ -67,7 +75,7 @@ def main() -> None:
     ):
         data = await image.read()
         img = Image.open(io.BytesIO(data)).convert("RGB")
-        mesh = pipeline.run(img)[0]
+        mesh = pipeline.run(img, seed=seed)[0]  # honor the client's seed
         mesh.simplify(16777216)  # nvdiffrast limit
         glb = o_voxel.postprocess.to_glb(
             vertices=mesh.vertices, faces=mesh.faces, attr_volume=mesh.attrs,

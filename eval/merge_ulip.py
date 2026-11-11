@@ -12,6 +12,9 @@ import csv
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ulip_client import pc_key  # noqa: E402
+
 
 def main() -> None:
     if len(sys.argv) != 3:
@@ -36,7 +39,7 @@ def main() -> None:
         mp = r.get("mesh_path")
         if not mp:
             continue
-        stem = Path(mp).stem
+        stem = pc_key(mp)
         if stem in scores:
             r["ulip_mean"] = scores[stem]
             filled += 1

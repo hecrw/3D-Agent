@@ -13,6 +13,14 @@ import os
 import numpy as np
 
 
+def pc_key(mesh_path: str) -> str:
+    """Unique point-cloud key for a mesh: <parent-dir>__<stem>. Shared by
+    export_pointclouds.py and merge_ulip.py so they always agree."""
+    from pathlib import Path
+    p = Path(mesh_path)
+    return f"{p.parent.name}__{p.stem}"
+
+
 def _endpoint() -> str | None:
     ws = os.environ.get("TRELLIS_WORKSPACE", "")
     if not ws:

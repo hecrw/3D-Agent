@@ -1,4 +1,6 @@
 # Python
+__pycache__/
+*.py[cod]
 
 # Virtual envs
 .venv/
@@ -17,4 +19,23 @@ local_settings.py
 .vscode/
 .idea/
 .DS_Store
-Thumbs.db.DS_Store
+Thumbs.db
+
+# Runtime state (recreated automatically)
+agent_checkpoints.sqlite3
+*.sqlite3-journal
+
+# macOS duplicate folders ("name 7.28.37 PM")
+eval/*[0-9].[0-9][0-9].[0-9][0-9]*PM/
+eval/*[0-9].[0-9][0-9].[0-9][0-9]*AM/
+
+# Eval run outputs: keep CSVs/meta, not the heavy artifacts
+eval/runs/**/*.glb
+eval/runs/**/*.npy
+eval/runs/**/*.sqlite3
+eval/runs/**/logs/
+eval/runs/**/*.views/
+eval/work/
+
+# Scratch dumps
+source_code.txt

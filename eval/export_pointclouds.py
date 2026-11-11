@@ -18,7 +18,7 @@ import numpy as np
 
 EVAL_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(EVAL_DIR))
-from ulip_client import sample_colored_pointcloud  # noqa: E402
+from ulip_client import pc_key, sample_colored_pointcloud  # noqa: E402
 
 
 def main() -> None:
@@ -33,11 +33,19 @@ def main() -> None:
                 if r.get("status") == "ok"
                 and r.get("mesh_path") and Path(r["mesh_path"]).exists()]
 
-    manifest = []
+    manifest, seen = [], {}
     for i, r in enumerate(rows, 1):
-        stem = Path(r["mesh_path"]).stem
+        # Key MUST be unique per mesh. The old key (mesh stem only) collided for
+        # the three baselines (all named e.g. airplane_01.glb), so every
+        # backbone was scored on whichever point cloud was exported first.
+        stem = pc_key(r["mesh_path"])
+        if stem in seen and seen[stem] != r["mesh_path"]:
+            sys.exit(f"point-cloud key collision: {stem!r} for "
+                     f"{seen[stem]} and {r['mesh_path']}")
+        seen[stem] = r["mesh_path"]
         npy = out_dir / f"{stem}.npy"
-        if not npy.exists():
+        # re-sample if the mesh is newer than a cached cloud (stale cache guard)
+        if not npy.exists() or npy.stat().st_mtime < Path(r["mesh_path"]).stat().st_mtime:
             print(f"[{i}/{len(rows)}] sampling {stem}")
             np.save(npy, sample_colored_pointcloud(r["mesh_path"]))
         manifest.append({"key": stem, "caption": r["prompt"]})
