@@ -83,7 +83,8 @@ preflight)
   elif [ "$prof" != "$ws" ]; then say "modal" "logged in as $prof but .env expects $ws"; fail=1
   else say "modal" "authed as $prof"; fi
   for h in hunyuan3d-2-generator-web partcrafter-objectgenerator-web; do
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 600 "https://$ws--$h.modal.run/" || true)
+    # -L: Modal answers 303 after 150 s while a cold container is still loading
+    code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 900 "https://$ws--$h.modal.run/" || true)
     [ "$code" = 200 ] && say "modal $h" "up" || { say "modal $h" "HTTP $code (deployed? cold start can take minutes)"; fail=1; }
   done
   curl -s -o /dev/null -w '%{http_code}' https://generativelanguage.googleapis.com/ | grep -q '^[234]' \
