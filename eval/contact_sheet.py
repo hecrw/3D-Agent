@@ -103,7 +103,7 @@ isn't changing the input — no metric can detect an effect there.</p>
                 if front else ""
             )
             scores = (f"CLIP {r.get('clip_mean','—')}  "
-                      f"Gen3D {r.get('gen3deval','—')}  "
+                      f"VLM {r.get('vlm_score','—')}  "
                       f"ULIP {r.get('ulip_mean','—')}")
             parts.append(
                 f'<div class="row">'

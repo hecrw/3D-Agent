@@ -9,6 +9,7 @@
 #   bash eval/setup_box.sh hunyuan      # Hunyuan3D-2 env "hunyuan"
 #   bash eval/setup_box.sh partcrafter  # PartCrafter env "partcrafter"
 #   bash eval/setup_box.sh ulip         # ULIP-2 env "ulip" (ULIP repo + weights auto-download on first score)
+#   bash eval/setup_box.sh t3bench      # T3Bench metric env "t3bench" + T3Bench repo at the pinned commit
 #   bash eval/setup_box.sh modal        # log the eval venv into Modal
 # Then:  bash eval/rerun_all.sh preflight
 #
@@ -130,6 +131,19 @@ ulip)
   pip install torch==2.5.1 torchvision==0.20.1 --index-url "$CU124"
   pip install open_clip_torch==2.24.0 timm easydict pyyaml numpy 'huggingface_hub[hf_transfer]'
   python -c "import torch, open_clip; print('ulip OK', torch.__version__, torch.cuda.is_available())"
+  ;;
+t3bench)
+  # T3Bench Quality (ImageReward) + Alignment (BLIP-2 flan-t5-xxl) scorer.
+  # BLIP-2 xxl downloads ~45 GB of weights and needs ~25 GB VRAM in fp16.
+  load_conda
+  clone https://github.com/THU-LYJ-Lab/T3Bench.git "$HOME/T3Bench"
+  git -C "$HOME/T3Bench" checkout 6367462cfd04467af772c168c5cd8570964b9df3
+  new_env t3bench 3.10
+  pip install torch==2.5.1 torchvision==0.20.1 --index-url "$CU124"
+  pip install image-reward 'transformers==4.46.3' accelerate sentencepiece \
+      pyrender trimesh google-genai python-dotenv numpy pillow
+  PYOPENGL_PLATFORM=egl python -c "import ImageReward, transformers, pyrender; \
+pyrender.OffscreenRenderer(64, 64).delete(); print('t3bench OK (EGL render works)')"
   ;;
 modal)
   echo "Log in as the account in .env's TRELLIS_WORKSPACE (the one PartCrafter/Hunyuan3D-2 are deployed to)."

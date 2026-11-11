@@ -6,7 +6,7 @@
 
 Takes a folder of <stem>.glb baseline meshes produced by the Colab notebook,
 matches each to its caption in eval/dataset/captions.csv (by filename stem), and
-scores it with the SAME metrics as the rest of the eval (CLIP + Gen3DEval via
+scores it with the SAME metrics as the rest of the eval (CLIP + VLM judge via
 Gemini + ULIP via the Modal app). Writes a results CSV with condition="baseline"
 so it slots straight into analyze.py alongside your restyle results.
 
@@ -23,7 +23,7 @@ from pathlib import Path
 EVAL_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(EVAL_DIR))
 
-# Importing run_pilot applies its patches (subprocess render, Gemini Gen3DEval,
+# Importing run_pilot applies its patches (subprocess render, Gemini VLM judge,
 # ULIP client) and runs django.setup().
 import run_pilot  # noqa: E402
 import tools       # noqa: E402
@@ -104,9 +104,9 @@ def main() -> None:
                            worst_view=clip.worst_view or "",
                            per_view=json.dumps(clip.per_view))
                 raw = {}
-                g = run_pilot._score_gen3deval(view_paths, caption, raw_out=raw)
-                row["gen3deval"] = "" if math.isnan(g) else f"{g:.1f}"
-                row["gen3deval_raw"] = raw.get("text", "")
+                g = run_pilot._score_vlm(view_paths, caption, raw_out=raw)
+                row["vlm_score"] = "" if math.isnan(g) else f"{g:.1f}"
+                row["vlm_score_raw"] = raw.get("text", "")
                 u = run_pilot._score_ulip(str(mesh), caption)
                 row["ulip_mean"] = "" if math.isnan(u) else f"{u:.4f}"
                 row["status"] = "ok"
@@ -115,7 +115,7 @@ def main() -> None:
             writer.writerow(row)
             fh.flush()
             print(f"    -> {row['status']}  clip={row['clip_mean']}  "
-                  f"gen3d={row['gen3deval']}  ulip={row['ulip_mean']}")
+                  f"vlm={row['vlm_score']}  ulip={row['ulip_mean']}")
     print(f"done -> {out_path}")
 
 

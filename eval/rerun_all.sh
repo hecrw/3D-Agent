@@ -5,18 +5,21 @@
 # All output lands in eval/runs/$RUN_ID/. Nothing from earlier runs is reused.
 #
 #   bash eval/rerun_all.sh preflight        # checks GPUs, envs, repos, keys, network
-#   bash eval/rerun_all.sh servers          # TRELLIS.2 servers: GPU0 :8200, GPU1 :8201
+#   bash eval/rerun_all.sh servers          # TRELLIS.2 servers: GPU1 :8200, GPU2 :8201
 #   bash eval/rerun_all.sh smoke            # 1 prompt x {raw, all_on} — verify before the full run
 #
 #   # the three below can run AT THE SAME TIME (one tmux pane each):
-#   bash eval/rerun_all.sh agent generated  # agent ablation, generated arm  -> server :8200 (GPU0)
-#   bash eval/rerun_all.sh agent retrieved  # agent ablation, retrieved arm  -> server :8201 (GPU1)
-#   bash eval/rerun_all.sh baselines retrieved   # direct backbones on GPU2
+#   bash eval/rerun_all.sh agent generated  # agent ablation, generated arm  -> server :8200 (GPU1)
+#   bash eval/rerun_all.sh agent retrieved  # agent ablation, retrieved arm  -> server :8201 (GPU2)
+#   bash eval/rerun_all.sh baselines retrieved   # direct backbones on GPU3
 #
-#   bash eval/rerun_all.sh baselines generated   # GPU2, after the generated arm (needs its concepts)
-#   bash eval/rerun_all.sh score            # CLIP + Gen3DEval for baseline meshes
+#   bash eval/rerun_all.sh baselines generated   # GPU3, after the generated arm (needs its concepts)
+#   bash eval/rerun_all.sh score            # CLIP + VLM score for baseline meshes
 #   bash eval/rerun_all.sh ulip             # ULIP-2 for every results CSV, GPU3
 #   bash eval/rerun_all.sh check            # fails loudly if any cell is missing/errored/unenforced
+#   # post-hoc metrics — run only AFTER every sweep above has finished:
+#   bash eval/rerun_all.sh t3bench          # T3Bench Quality + Alignment (t3bench env, GPU3)
+#   bash eval/rerun_all.sh judge            # pairwise VLM judge, Gen3DEval protocol + Elo
 #   bash eval/rerun_all.sh analyze
 #   bash eval/rerun_all.sh stop-servers
 #
@@ -34,19 +37,25 @@ TRELLIS_ENV="${TRELLIS_ENV:-trellis}"        # conda env names
 HUNYUAN_ENV="${HUNYUAN_ENV:-hunyuan}"
 PARTCRAFTER_ENV="${PARTCRAFTER_ENV:-partcrafter}"
 ULIP_ENV="${ULIP_ENV:-ulip}"
+T3BENCH_ENV="${T3BENCH_ENV:-t3bench}"
+T3BENCH_REPO="${T3BENCH_REPO:-$HOME/T3Bench}"
 MAX_PASSES="${MAX_PASSES:-3}"                # resume passes to retry errored cells
 
-# GPU layout (override if you want a different split)
-GPU_TRELLIS_GEN="${GPU_TRELLIS_GEN:-0}"; PORT_GEN="${PORT_GEN:-8200}"
-GPU_TRELLIS_RET="${GPU_TRELLIS_RET:-1}"; PORT_RET="${PORT_RET:-8201}"
-GPU_BASELINES="${GPU_BASELINES:-2}"
+# GPU layout (override if you want a different split). Defaults avoid GPU 0,
+# which other users keep nearly full on the shared box.
+GPU_TRELLIS_GEN="${GPU_TRELLIS_GEN:-1}"; PORT_GEN="${PORT_GEN:-8200}"
+GPU_TRELLIS_RET="${GPU_TRELLIS_RET:-2}"; PORT_RET="${PORT_RET:-8201}"
+GPU_BASELINES="${GPU_BASELINES:-3}"
 GPU_ULIP="${GPU_ULIP:-3}"
+GPU_T3="${GPU_T3:-3}"
 
 export GEMINI_SEED="${GEMINI_SEED:-20261111}"
 export AGENT_LLM_MODEL="${AGENT_LLM_MODEL:-gemini-3.8-flash}"
 export JUDGE_MODEL="${JUDGE_MODEL:-gemini-3.8-flash}"
 export OPENCV_IO_ENABLE_OPENEXR=1
 export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.6}"   # A6000 / 3090 = Ampere sm_86
+# Headless Linux box: pyrender (CLIP/judge/T3Bench renders) must use EGL.
+if [ "$(uname)" = Linux ] && [ -z "${DISPLAY:-}" ]; then export PYOPENGL_PLATFORM="${PYOPENGL_PLATFORM:-egl}"; fi
 
 mkdir -p "$RUN_DIR/logs"
 # conda from eval/setup_box.sh (Miniforge in $HOME), and the venv's `modal` CLI
@@ -85,7 +94,7 @@ print(' '.join(sorted(set(bad)))); sys.exit(1 if bad else 0)" 2>/dev/null); then
   fi
   [ -f .env ] && grep -q GEMINI_API_KEY .env && say ".env" "ok" || { say ".env" "missing GEMINI_API_KEY (copy .env from your Mac)"; fail=1; }
   if command -v conda >/dev/null; then
-    for e in "$TRELLIS_ENV" "$HUNYUAN_ENV" "$PARTCRAFTER_ENV" "$ULIP_ENV"; do
+    for e in "$TRELLIS_ENV" "$HUNYUAN_ENV" "$PARTCRAFTER_ENV" "$ULIP_ENV" "$T3BENCH_ENV"; do
       conda env list | awk '{print $1}' | grep -qx "$e" && say "conda env $e" "ok" || { say "conda env $e" "MISSING (bash eval/setup_box.sh ${e})"; fail=1; }
     done
   else
@@ -94,6 +103,10 @@ print(' '.join(sorted(set(bad)))); sys.exit(1 if bad else 0)" 2>/dev/null); then
   for r in "$TRELLIS_REPO" "$HUNYUAN_REPO" "$PARTCRAFTER_REPO"; do
     [ -d "$r" ] && say "repo $(basename "$r")" "ok" || { say "repo $(basename "$r")" "MISSING ($r)"; fail=1; }
   done
+  [ "$(git -C "$T3BENCH_REPO" rev-parse HEAD 2>/dev/null)" = 6367462cfd04467af772c168c5cd8570964b9df3 ] \
+    && say "repo T3Bench" "ok (pinned)" || { say "repo T3Bench" "missing/not pinned (bash eval/setup_box.sh t3bench)"; fail=1; }
+  "$PY" -c "import sys; sys.path.insert(0,'eval'); import render3d, pyrender; pyrender.OffscreenRenderer(64,64).delete()" 2>/dev/null \
+    && say "headless render" "ok (${PYOPENGL_PLATFORM:-default})" || { say "headless render" "FAILED — pyrender can't open a ${PYOPENGL_PLATFORM:-GL} context"; fail=1; }
   n=$(ls eval/dataset/images/*.png 2>/dev/null | wc -l)
   [ "$n" -ge 20 ] && say "input photos" "$n" || { say "input photos" "only $n/20 in eval/dataset/images"; fail=1; }
   ws=$(grep -E '^TRELLIS_WORKSPACE=' .env | cut -d= -f2 | tr -d '"')
@@ -109,8 +122,22 @@ print(' '.join(sorted(set(bad)))); sys.exit(1 if bad else 0)" 2>/dev/null); then
     st=$(printf '%s' "$apps" | "$PY" -c "import json,sys; print(next((x['State'] for x in json.load(sys.stdin) if x.get('Description')=='$a'), 'not deployed'))")
     [ "$st" = deployed ] && say "modal app $a" "deployed" || { say "modal app $a" "$st (run: modal deploy …/modal_app.py)"; fail=1; }
   done
-  curl -s -o /dev/null -w '%{http_code}' https://generativelanguage.googleapis.com/ | grep -q '^[234]' \
-    && say "Gemini reachable" "ok" || { say "Gemini reachable" "NO network to Google API"; fail=1; }
+  # A real (tiny) call: proves network, key AND remaining credit.
+  if gem=$("$PY" - 2>&1 <<'EOF'
+import os
+from dotenv import load_dotenv; load_dotenv(".env")
+from google import genai
+m = os.environ.get("AGENT_LLM_MODEL", "gemini-3.8-flash")
+try:
+    r = genai.Client(api_key=os.environ["GEMINI_API_KEY"]).models.generate_content(model=m, contents="Reply with: ok")
+    print(f"ok ({r.model_version})")
+except Exception as e:
+    msg = str(e)
+    print("OUT OF CREDIT — top up at ai.studio/projects" if "credits are depleted" in msg or "402" in msg
+          else msg[:160])
+    raise SystemExit(1)
+EOF
+); then say "Gemini key" "$gem"; else say "Gemini key" "$gem"; fail=1; fi
   curl -s -o /dev/null https://huggingface.co && say "HF reachable" "ok" || { say "HF reachable" "NO (weights download)"; fail=1; }
   [ -x "$CONDA_DIR/envs/cuda124/bin/nvcc" ] && say "build toolchain" "cuda124 env ok" \
     || say "build toolchain" "missing (bash eval/setup_box.sh buildtools) — only needed for setup"
@@ -230,6 +257,13 @@ for f in sorted(have):
     bad += len(missing) + len(noulip) + len(unenf)
 sys.exit(1 if bad else 0)
 EOF
+  ;;
+t3bench)
+  CUDA_VISIBLE_DEVICES=$GPU_T3 crun "$T3BENCH_ENV" python eval/score_t3bench.py "$RUN_DIR" --t3bench "$T3BENCH_REPO" \
+    2>&1 | tee -a "$RUN_DIR/logs/t3bench.log"
+  ;;
+judge)
+  "$PY" eval/vlm_judge.py "$RUN_DIR" 2>&1 | tee -a "$RUN_DIR/logs/judge.log"
   ;;
 analyze)
   for csv in "$RUN_DIR"/results_*.csv; do echo "### $csv"; "$PY" eval/analyze.py "$csv"; done

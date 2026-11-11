@@ -5,10 +5,10 @@
 
 Reads results_pilot.csv (generated), results_retrieved.csv, and the three
 results_baseline_*.csv, then writes to eval/figures/:
-  fig_baseline_gen3d.png   - pipeline vs 3 baselines (Gen3DEval)
+  fig_baseline_vlm.png   - pipeline vs 3 baselines (VLM judge)
   fig_domain_gap.png       - raw vs all_on, generated vs retrieved (the thesis)
-  fig_axis_ablation.png    - per-axis Gen3DEval marginal drop (LOO)
-  fig_per_object.png       - per-object Gen3DEval, sorted (difficulty spread)
+  fig_axis_ablation.png    - per-axis VLM judge marginal drop (LOO)
+  fig_per_object.png       - per-object VLM judge, sorted (difficulty spread)
   fig_per_view_clip.png    - CLIP by rendered view (top/bottom weakness)
 """
 from __future__ import annotations
@@ -54,27 +54,27 @@ def fig_baseline():
     pilot = load("results_pilot.csv")
     bases = {b: load(f"results_baseline_{b}.csv") for b in ("trellis", "hunyuan", "partcrafter")}
     names = ["Ours\n(all_on)", "Ours\n(raw)", "TRELLIS", "Hunyuan3D-2", "PartCrafter"]
-    vals = [col(pilot, "all_on", "gen3deval"), col(pilot, "raw", "gen3deval"),
-            col(bases["trellis"], "baseline", "gen3deval"),
-            col(bases["hunyuan"], "baseline", "gen3deval"),
-            col(bases["partcrafter"], "baseline", "gen3deval")]
+    vals = [col(pilot, "all_on", "vlm_score"), col(pilot, "raw", "vlm_score"),
+            col(bases["trellis"], "baseline", "vlm_score"),
+            col(bases["hunyuan"], "baseline", "vlm_score"),
+            col(bases["partcrafter"], "baseline", "vlm_score")]
     colors = [ACCENT, ACCENT, MUTED, MUTED, MUTED]
     fig, ax = plt.subplots(figsize=(6.4, 3.6))
     bars = ax.bar(names, vals, color=colors)
-    ax.set_ylabel("Gen3DEval (1–10)")
+    ax.set_ylabel("VLM judge score (1–10)")
     ax.set_title("Geometric quality: our pipeline vs. baselines")
     ax.set_ylim(0, 10)
     for b, v in zip(bars, vals):
         ax.text(b.get_x() + b.get_width() / 2, v + 0.15, f"{v:.2f}", ha="center", fontsize=10)
-    save(fig, "fig_baseline_gen3d.png")
+    save(fig, "fig_baseline_vlm.png")
 
 
 def fig_domain_gap():
     gen = load("results_pilot.csv")
     ret = load("results_retrieved.csv")
     arms = ["Generated\n(synthetic input)", "Retrieved\n(real photo)"]
-    raw = [col(gen, "raw", "gen3deval"), col(ret, "raw", "gen3deval")]
-    allon = [col(gen, "all_on", "gen3deval"), col(ret, "all_on", "gen3deval")]
+    raw = [col(gen, "raw", "vlm_score"), col(ret, "raw", "vlm_score")]
+    allon = [col(gen, "all_on", "vlm_score"), col(ret, "all_on", "vlm_score")]
     x = range(len(arms))
     w = 0.35
     fig, ax = plt.subplots(figsize=(6.0, 3.8))
@@ -82,7 +82,7 @@ def fig_domain_gap():
     b2 = ax.bar([i + w / 2 for i in x], allon, w, label="all_on (restyle)", color=ACCENT)
     ax.set_xticks(list(x))
     ax.set_xticklabels(arms)
-    ax.set_ylabel("Gen3DEval (1–10)")
+    ax.set_ylabel("VLM judge score (1–10)")
     ax.set_ylim(0, 10)
     ax.set_title("Restyle is inert on clean inputs, large on real photos")
     ax.legend(frameon=False)
@@ -95,15 +95,15 @@ def fig_domain_gap():
 
 def fig_axis_ablation():
     ret = load("results_retrieved.csv")
-    allon = col(ret, "all_on", "gen3deval")
+    allon = col(ret, "all_on", "vlm_score")
     axes = ["background", "framing", "view", "lighting", "isolation", "part_visibility"]
-    drops = [(a, allon - col(ret, f"loo_{a}", "gen3deval")) for a in axes]
+    drops = [(a, allon - col(ret, f"loo_{a}", "vlm_score")) for a in axes]
     drops.sort(key=lambda t: t[1])  # ascending so biggest effect on top
     labels = [a.replace("_", " ") for a, _ in drops]
     vals = [d for _, d in drops]
     fig, ax = plt.subplots(figsize=(6.2, 3.6))
     ax.barh(labels, vals, color=INK)
-    ax.set_xlabel("Gen3DEval drop when axis removed (all_on − loo_X)")
+    ax.set_xlabel("VLM judge score drop when axis removed (all_on − loo_X)")
     ax.set_title("Per-axis marginal contribution (retrieved arm)")
     for i, v in enumerate(vals):
         ax.text(v + 0.02, i, f"{v:.2f}", va="center", fontsize=9)
@@ -114,15 +114,15 @@ def fig_per_object():
     gen = load("results_pilot.csv")
     objs = {}
     for r in gen:
-        if r["condition"] == "all_on" and r.get("gen3deval", "").strip() not in ("", "nan"):
-            objs[r["prompt"]] = float(r["gen3deval"])
+        if r["condition"] == "all_on" and r.get("vlm_score", "").strip() not in ("", "nan"):
+            objs[r["prompt"]] = float(r["vlm_score"])
     items = sorted(objs.items(), key=lambda t: t[1])
     labels = [p[:34] for p, _ in items]
     vals = [v for _, v in items]
     colors = [ACCENT if v <= 3 else INK for v in vals]
     fig, ax = plt.subplots(figsize=(6.6, max(4, 0.32 * len(items))))
     ax.barh(labels, vals, color=colors)
-    ax.set_xlabel("Gen3DEval (1–10)")
+    ax.set_xlabel("VLM judge score (1–10)")
     ax.set_title("Per-object geometric quality (all_on, generated)")
     ax.set_xlim(0, 10)
     save(fig, "fig_per_object.png")

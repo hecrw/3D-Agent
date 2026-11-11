@@ -13,7 +13,7 @@ text prompt + condition instruction
   → agent (LangGraph + Claude)   autonomously calls concept gen, restyle, backbone
   → .glb mesh
   → render_mesh_views()          8 PNGs from different camera angles
-  → CLIP / Gen3DEval / ULIP-2    scores rendered views against the prompt caption
+  → CLIP / VLM judge / ULIP-2    scores rendered views against the prompt caption
 ```
 
 The condition instruction is prepended to the prompt to control which restyle
@@ -39,10 +39,16 @@ Marginal effect of axis X = `score(all_on) − score(loo_X)`. Positive = axis he
 | Metric | Column | Notes |
 |--------|--------|-------|
 | CLIP | `clip_mean` | CLIP ViT-L/14 image-text cosine similarity, mean over 8 views. Always available. |
-| Gen3DEval | `gen3deval` | The agent's Gemini model (`agent.llm`) rates rendered views 1–10 on geometry, texture, and semantic alignment. Uses the existing `GEMINI_API_KEY` — no extra account needed. |
+| VLM score | `vlm_score` | A pinned Gemini judge (temperature 0) rates 4 rendered views 1–10 on geometry, texture and semantic alignment. Our own prompt — **not** the published Gen3DEval. |
 | ULIP-2 | `ulip_mean` | 3D-aware **point-cloud**↔text similarity (the metric Twist & Compute reports). Scored on Modal GPU — see below. |
+| T3Bench Quality | `t3_quality` | T3Bench's own quality metric (our prompts are T3Bench prompts): ImageReward over 162×5 icosphere views, regional smoothing, `×20+50`. `eval/score_t3bench.py`, run post hoc. |
+| T3Bench Alignment | `t3_alignment` | T3Bench's alignment metric, 1–5: BLIP-2 captions 12 views → LLM merges → LLM scores vs the prompt. Gemini stands in for GPT-4 (documented deviation). |
+| Pairwise VLM judge | `judge_summary.csv` | Follows the **Gen3DEval protocol** (pairwise, 4 turntable views, RGB + normal maps, appearance / surface / text-fidelity, Elo) with Gemini as judge, because Gen3DEval's model is not released. Both presentation orders; a win counts only if they agree. `eval/vlm_judge.py`, run post hoc. |
 
-CLIP and Gen3DEval run automatically. ULIP-2 is skipped (logged as empty) if its
+**Naming in the paper:** call the pairwise metric "VLM judge (Gemini) following
+the Gen3DEval protocol", never "Gen3DEval" — the Gen3DEval model is not public.
+
+CLIP and VLM judge run automatically. ULIP-2 is skipped (logged as empty) if its
 Modal app isn't deployed/reachable — the rest of the sweep is unaffected.
 
 ### ULIP-2 setup (Modal GPU)
@@ -125,7 +131,7 @@ separately, so the arms never collide.
 
 Requires Modal apps deployed and `.env` populated with `GEMINI_API_KEY` and
 `TRELLIS_WORKSPACE` (see top-level README). All three metrics that run by
-default (CLIP, Gen3DEval via Gemini) need no additional keys.
+default (CLIP, VLM judge via Gemini) need no additional keys.
 
 ## Analyze
 
@@ -162,7 +168,7 @@ fix is a stronger restyle clause, not more samples.
 | `clip_accept` | True if clip_mean ≥ 0.25 (rough quality gate) |
 | `worst_view` | path to the lowest-scoring rendered view |
 | `per_view` | JSON list of per-view CLIP scores |
-| `gen3deval` | VLM judge score 1–10 (blank if API unavailable) |
+| `vlm_score` | VLM judge score 1–10 (blank if API unavailable) |
 | `ulip_mean` | mean ULIP-2 score (blank if not installed) |
 | `concept_path` | path to the Gemini-generated concept image |
 | `restyled_path` | path to the restyled image (= concept_path for raw) |

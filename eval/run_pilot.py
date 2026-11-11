@@ -8,7 +8,7 @@ For each (prompt, condition) it:
   1. builds a system instruction that forces the restyle axes for the condition,
   2. sends the prompt to the agent and waits for a mesh to be produced,
   3. renders multi-view PNGs from the mesh,
-  4. scores with CLIP, Gen3DEval (VLM-as-judge via Claude Haiku), and ULIP-2,
+  4. scores with CLIP, a VLM judge (Gemini, 1-10; NOT the published VLM judge), and ULIP-2,
 and appends one row to a CSV. Already-present rows are skipped so the sweep is
 resumable after a crash.
 
@@ -190,7 +190,7 @@ def _eval_concept(prompt, out_path=None):
 agent.restyle_to_objaverse = _eval_restyle
 agent.generate_concept_image = _eval_concept
 
-# Gen3DEval judge: its own pinned model at temperature 0 (deterministic as the
+# VLM judge: its own pinned model at temperature 0 (deterministic as the
 # API allows), independent of the agent's sampling temperature.
 from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: E402
 JUDGE_MODEL = os.environ.get("JUDGE_MODEL", agent.AGENT_LLM_MODEL)
@@ -205,7 +205,7 @@ RUNS_DIR     = REPO_ROOT / "eval" / "runs"
 CSV_FIELDS = [
     "prompt", "condition",
     "clip_mean", "clip_accept", "worst_view", "per_view",
-    "gen3deval", "ulip_mean",
+    "vlm_score", "ulip_mean",
     "restyled_path", "mesh_path", "status", "error", "seconds",
     # --- provenance (added for camera-ready rerun) ---
     "run_id", "input_mode", "stem", "started_at",
@@ -213,7 +213,7 @@ CSV_FIELDS = [
     "gemini_seed", "backbone_tool", "backbone_endpoint", "backbone_args",
     "backbone_seed", "tool_sequence", "n_tool_calls", "n_restyle_calls",
     "n_hitl_interrupts", "condition_enforced", "concept_path",
-    "input_image_path", "gen3deval_raw", "reused_mesh", "trace_path",
+    "input_image_path", "vlm_score_raw", "reused_mesh", "trace_path",
 ]
 
 GEN_TOOLS = {"tool_trellis2", "tool_trellis2_texture", "tool_hunyuan3d2",
@@ -283,7 +283,10 @@ def _write_run_meta(run_dir: Path, run_id: str, args) -> None:
             model=agent.AGENT_LLM_MODEL, contents="Reply with: ok")
         resolved = r.model_version
     except Exception as e:  # noqa: BLE001
-        resolved = f"error: {e}"
+        # Every cell needs Gemini (agent, concept, restyle, judge). If the
+        # account is out of credit or the key is bad, stop now instead of
+        # writing a whole sweep of "agent did not produce a .glb" errors.
+        sys.exit(f"Gemini is not usable — stopping before any generation:\n{str(e)[:400]}")
     local_trellis = os.environ.get("LOCAL_TRELLIS_URL")
     trellis_health = None
     if local_trellis:
@@ -328,7 +331,7 @@ def _write_run_meta(run_dir: Path, run_id: str, args) -> None:
 # Scoring helpers
 # ---------------------------------------------------------------------------
 
-def _score_gen3deval(view_paths: list[str], caption: str,
+def _score_vlm(view_paths: list[str], caption: str,
                      raw_out: dict | None = None) -> float:
     """VLM-as-judge quality score 1–10 using the agent's Gemini model.
 
@@ -598,7 +601,7 @@ def _existing_input_image(tag: str, cond_name: str,
     return None, None
 
 
-_SKIP_GEN3DEVAL = False
+_SKIP_VLM = False
 
 
 def _fill_provenance(row: dict, trace: dict, cond_name: str,
@@ -703,14 +706,14 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
             per_view=json.dumps(clip_rep.per_view),
         )
 
-        # Gen3DEval
-        if _SKIP_GEN3DEVAL:
-            gen3d, raw = math.nan, {}
+        # VLM judge
+        if _SKIP_VLM:
+            vlm, raw = math.nan, {}
         else:
             raw = {}
-            gen3d = _score_gen3deval(view_paths, caption, raw_out=raw)
-        row["gen3deval"] = "" if math.isnan(gen3d) else f"{gen3d:.1f}"
-        row["gen3deval_raw"] = raw.get("text", "")
+            vlm = _score_vlm(view_paths, caption, raw_out=raw)
+        row["vlm_score"] = "" if math.isnan(vlm) else f"{vlm:.1f}"
+        row["vlm_score_raw"] = raw.get("text", "")
 
         # ULIP-2 (point-cloud↔text, scored from the mesh on Modal GPU)
         ulip = _score_ulip(mesh, caption)
@@ -738,8 +741,8 @@ def main() -> None:
                          "eval/runs/<run-id>/results_<input>.csv)")
     ap.add_argument("--limit", type=int, default=0,
                     help="max prompts to process (0 = all)")
-    ap.add_argument("--no-gen3deval", action="store_true",
-                    help="skip the Gen3DEval scoring call")
+    ap.add_argument("--no-vlm-score", action="store_true",
+                    help="skip the VLM judge scoring call")
     ap.add_argument("--input", choices=["generated", "photo", "retrieved"],
                     default="generated",
                     help="generated: agent makes a concept image from the prompt "
@@ -753,8 +756,8 @@ def main() -> None:
                          "Default: all 8 (raw, all_on, 6x loo_*).")
     args = ap.parse_args()
 
-    global _SKIP_GEN3DEVAL
-    _SKIP_GEN3DEVAL = args.no_gen3deval
+    global _SKIP_VLM
+    _SKIP_VLM = args.no_vlm_score
     run_id = args.run_id or time.strftime("run_%Y%m%d_%H%M%S")
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -835,7 +838,7 @@ def main() -> None:
                 fh.flush()
                 print(f"    -> {row['status']}  "
                       f"clip={row['clip_mean']}  "
-                      f"gen3d={row['gen3deval']}  "
+                      f"vlm={row['vlm_score']}  "
                       f"backbone={row['backbone_tool']}  "
                       f"enforced={row['condition_enforced']}  "
                       f"({row['seconds']}s)")

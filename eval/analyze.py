@@ -3,7 +3,7 @@
 
     .venv/bin/python eval/analyze.py eval/results_pilot.csv
 
-For each metric (CLIP, Gen3DEval, ULIP-2), prints:
+For each metric (CLIP, VLM score, ULIP-2, T3Bench Quality/Alignment), prints:
   1. Mean score by condition
   2. Marginal effect per axis: all_on − loo_<axis>, paired per prompt
 
@@ -18,8 +18,10 @@ from statistics import mean, pstdev
 
 METRICS = [
     ("clip_mean", "CLIP"),
-    ("gen3deval",  "Gen3DEval"),
+    ("vlm_score",  "VLM judge"),
     ("ulip_mean",  "ULIP-2"),
+    ("t3_quality",   "T3Bench Quality"),
+    ("t3_alignment", "T3Bench Alignment"),
 ]
 
 
