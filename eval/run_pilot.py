@@ -749,11 +749,14 @@ def main() -> None:
                          "(default). photo: feed a hand-supplied real photo from "
                          "eval/dataset/images/<filename>. retrieved: auto-fetch a "
                          "real web photo per prompt (Tavily) and cache it there.")
-    ap.add_argument("--conditions", nargs="+", default=None,
+    ap.add_argument("--conditions", nargs="+", default=["raw", "all_on"],
                     metavar="COND",
-                    help="subset of conditions to run, e.g. --conditions raw "
-                         "all_on (just the headline comparison = 2 gens/prompt). "
-                         "Default: all 8 (raw, all_on, 6x loo_*).")
+                    help="conditions to run. Default: raw all_on (the paper's "
+                         "comparison). The leave-one-out loo_<axis> conditions "
+                         "still exist but were dropped from the camera-ready.")
+    ap.add_argument("--auto-retrieve", action="store_true",
+                    help="retrieved mode: auto-fetch a web photo (Tavily) for "
+                         "prompts with no curated photo. Off by default.")
     args = ap.parse_args()
 
     global _SKIP_VLM
@@ -771,7 +774,10 @@ def main() -> None:
         captions = captions[:args.limit]
 
     # retrieved: auto-fetch one real web photo per prompt, cached to images/.
-    if args.input == "retrieved":
+    # retrieved: photos are hand-curated (eval/dataset/curate_photos.py) with a
+    # licence manifest. Auto-fetching a web image for a missing one is what
+    # once saved an Instagram HTML page as kite_01.png — only on request now.
+    if args.input == "retrieved" and args.auto_retrieve:
         ensure_retrieved_photos(captions)
 
     # photo/retrieved both feed a real photo from images/ to the agent.

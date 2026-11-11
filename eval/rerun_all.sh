@@ -107,8 +107,20 @@ print(' '.join(sorted(set(bad)))); sys.exit(1 if bad else 0)" 2>/dev/null); then
     && say "repo T3Bench" "ok (pinned)" || { say "repo T3Bench" "missing/not pinned (bash eval/setup_box.sh t3bench)"; fail=1; }
   "$PY" -c "import sys; sys.path.insert(0,'eval'); import render3d, pyrender; pyrender.OffscreenRenderer(64,64).delete()" 2>/dev/null \
     && say "headless render" "ok (${PYOPENGL_PLATFORM:-default})" || { say "headless render" "FAILED — pyrender can't open a ${PYOPENGL_PLATFORM:-GL} context"; fail=1; }
-  n=$(ls eval/dataset/images/*.png 2>/dev/null | wc -l)
-  [ "$n" -ge 20 ] && say "input photos" "$n" || { say "input photos" "only $n/20 in eval/dataset/images"; fail=1; }
+  # Open every photo — a file COUNT passed even though kite_01.png was an
+  # Instagram HTML page saved as .png.
+  if bad=$("$PY" - <<'EOF'
+import csv
+from PIL import Image
+bad = []
+for r in csv.DictReader(open("eval/dataset/captions.csv")):
+    try:
+        Image.open(f"eval/dataset/images/{r['filename']}").verify()
+    except Exception:
+        bad.append(r["filename"])
+print(" ".join(bad)); raise SystemExit(1 if bad else 0)
+EOF
+); then say "input photos" "all valid images"; else say "input photos" "NOT IMAGES: $bad"; fail=1; fi
   ws=$(grep -E '^TRELLIS_WORKSPACE=' .env | cut -d= -f2 | tr -d '"')
   prof=$(modal profile current 2>/dev/null || true)
   if [ -z "$prof" ]; then say "modal" "not authed (bash eval/setup_box.sh modal)"; fail=1

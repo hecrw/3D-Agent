@@ -1,0 +1,102 @@
+{
+ "query": "orange cat",
+ "next_offset": 40,
+ "candidates": [
+  {
+   "title": "File:Calico cat, - Assisi, Italy.jpg",
+   "file_page": "https://commons.wikimedia.org/wiki/File:Calico_cat,_-_Assisi,_Italy.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Calico_cat%2C_-_Assisi%2C_Italy.jpg/1280px-Calico_cat%2C_-_Assisi%2C_Italy.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "original": "https://upload.wikimedia.org/wikipedia/commons/0/01/Calico_cat%2C_-_Assisi%2C_Italy.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "width": 6000,
+   "height": 4000,
+   "license": "CC BY-SA 4.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "author": "Terragio67",
+   "file": "c01.jpg"
+  },
+  {
+   "title": "File:Tabby cats of \u014cizumi Ryokuchi Park, January 2019 - 8816.jpg",
+   "file_page": "https://commons.wikimedia.org/wiki/File:Tabby_cats_of_%C5%8Cizumi_Ryokuchi_Park,_January_2019_-_8816.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Tabby_cats_of_%C5%8Cizumi_Ryokuchi_Park%2C_January_2019_-_8816.jpg/1280px-Tabby_cats_of_%C5%8Cizumi_Ryokuchi_Park%2C_January_2019_-_8816.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "original": "https://upload.wikimedia.org/wikipedia/commons/0/02/Tabby_cats_of_%C5%8Cizumi_Ryokuchi_Park%2C_January_2019_-_8816.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "width": 5133,
+   "height": 3143,
+   "license": "CC BY-SA 4.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "author": "Laitche",
+   "file": "c02.jpg"
+  },
+  {
+   "title": "File:Orange cat PHOTO.jpg",
+   "file_page": "https://commons.wikimedia.org/wiki/File:Orange_cat_PHOTO.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/Orange_cat_PHOTO.jpg/1280px-Orange_cat_PHOTO.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "original": "https://upload.wikimedia.org/wikipedia/commons/7/72/Orange_cat_PHOTO.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "width": 4896,
+   "height": 2752,
+   "license": "CC0",
+   "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+   "author": "stefygo54",
+   "file": "c03.jpg"
+  },
+  {
+   "title": "File:Orange cat on a tree.jpg",
+   "file_page": "https://commons.wikimedia.org/wiki/File:Orange_cat_on_a_tree.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3b/Orange_cat_on_a_tree.jpg/1280px-Orange_cat_on_a_tree.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "original": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Orange_cat_on_a_tree.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "width": 3075,
+   "height": 3484,
+   "license": "CC BY-SA 4.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "author": "Irrmam",
+   "file": "c04.jpg"
+  },
+  {
+   "title": "File:Orange cat in Kusadasi.jpg",
+   "file_page": "https://commons.wikimedia.org/wiki/File:Orange_cat_in_Kusadasi.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f2/Orange_cat_in_Kusadasi.jpg/1280px-Orange_cat_in_Kusadasi.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "original": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Orange_cat_in_Kusadasi.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "width": 4080,
+   "height": 3060,
+   "license": "CC BY-SA 4.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "author": "Finnfrog99",
+   "file": "c05.jpg"
+  },
+  {
+   "title": "File:Stray orange cat..jpg",
+   "file_page": "https://commons.wikimedia.org/wiki/File:Stray_orange_cat..jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/35/Stray_orange_cat..jpg/1280px-Stray_orange_cat..jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "original": "https://upload.wikimedia.org/wikipedia/commons/3/35/Stray_orange_cat..jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "width": 3060,
+   "height": 4080,
+   "license": "CC0",
+   "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+   "author": "Inpacod2",
+   "file": "c06.jpg"
+  },
+  {
+   "title": "File:Orange cat at street.jpg",
+   "file_page": "https://commons.wikimedia.org/wiki/File:Orange_cat_at_street.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3b/Orange_cat_at_street.jpg/1280px-Orange_cat_at_street.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "original": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Orange_cat_at_street.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "width": 3000,
+   "height": 4000,
+   "license": "CC BY-SA 2.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+   "author": "Jaredryandloneria",
+   "file": "c07.jpg"
+  },
+  {
+   "title": "File:Orange cat eating.jpg",
+   "file_page": "https://commons.wikimedia.org/wiki/File:Orange_cat_eating.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6b/Orange_cat_eating.jpg/1280px-Orange_cat_eating.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "original": "https://upload.wikimedia.org/wikipedia/commons/6/6b/Orange_cat_eating.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "width": 4872,
+   "height": 1712,
+   "license": "CC BY-SA 4.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "author": "FBenjr123",
+   "file": "c08.jpg"
+  }
+ ]
+}

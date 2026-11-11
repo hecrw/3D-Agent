@@ -19,20 +19,17 @@ text prompt + condition instruction
 The condition instruction is prepended to the prompt to control which restyle
 axes the agent uses. The agent's choice of backbone is unrestricted.
 
-## Conditions (8)
+## Conditions (camera-ready: 2)
 
 | Condition | Restyle |
 |-----------|---------|
-| `raw` | no restyle — concept image fed straight to backbone |
-| `all_on` | all 6 axes active (background, framing, view, lighting, isolation, part_visibility) |
-| `loo_background` | all axes **except** background |
-| `loo_framing` | all axes **except** framing |
-| `loo_view` | all axes **except** view |
-| `loo_lighting` | all axes **except** lighting |
-| `loo_isolation` | all axes **except** isolation |
-| `loo_part_visibility` | all axes **except** part_visibility |
+| `raw` | no restyle — the input image goes straight to the backbone (restyle tool is an identity pass-through) |
+| `all_on` | full restyle prompt (background, framing, view, lighting, isolation, part_visibility) |
 
-Marginal effect of axis X = `score(all_on) − score(loo_X)`. Positive = axis helps.
+The six leave-one-out conditions (`loo_<axis>`) still exist in `run_pilot.py`
+(`--conditions loo_view …`) but were dropped from the camera-ready: the six
+clauses act on one image edit and are not separable, so the comparison is
+`raw` vs `all_on` on more prompts instead.
 
 ## Metrics
 
@@ -77,12 +74,18 @@ First build compiles `pointnet2_ops` and downloads ViT-bigG-14 (~5 GB) + the
 
 ## Dataset
 
-20 text prompts drawn from the T3Bench single-object benchmark
-(arXiv:2310.02977), covering vehicles, animals, furniture, instruments, and
-everyday objects. Prompts are in `eval/dataset/captions.csv`.
+50 prompts from the T3Bench single-object set (arXiv:2310.02977), in T3Bench's
+exact wording: the 20 prompts of the original submission plus 30 drawn at
+random (seed 20261112) from the other 80. Built by
+`eval/dataset/make_prompts.py`; each prompt's id `t3s_NNN` is its line number
+in T3Bench's `data/prompt_single.txt`.
 
-Concept images are generated automatically by `run_pilot.py` and cached in
-`eval/dataset/images/`. Delete an image to regenerate it.
+Real photos (retrieved arm) are hand-picked from openly licensed Wikimedia
+Commons candidates under criteria fixed before any results
+(`eval/dataset/curate_photos.py`); source, author and licence of each are in
+`eval/dataset/images/manifest.csv`. The submission's 20 web photos (one was an
+HTML page, several watermarked or cropped) are kept in `images_submission/`
+for reference only.
 
 ## Cost estimate
 
