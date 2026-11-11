@@ -13,8 +13,9 @@
 # Then:  bash eval/rerun_all.sh preflight
 #
 # trellis / hunyuan / partcrafter / ulip are independent: after buildtools you
-# can run them in separate terminals at the same time.
-set -uo pipefail
+# can run them in separate terminals at the same time (each uses its own
+# package cache). If a stage fails, fix the cause and just rerun that stage.
+set -euo pipefail   # stop at the first failure instead of cascading errors
 
 CONDA_DIR="${CONDA_DIR:-$HOME/miniforge3}"
 TOOLS_ENV="cuda124"
@@ -24,6 +25,8 @@ CU124="https://download.pytorch.org/whl/cu124"
 
 load_conda() {
   [ -f "$CONDA_DIR/etc/profile.d/conda.sh" ] || { echo "conda not installed — run: bash eval/setup_box.sh conda"; exit 1; }
+  # conda's activate scripts reference unset variables; don't trip `set -u`.
+  set +u
   # shellcheck disable=SC1091
   . "$CONDA_DIR/etc/profile.d/conda.sh"
 }
@@ -43,8 +46,18 @@ use_buildtools() {
 }
 
 new_env() {  # new_env <name> <python>
-  conda env list | awk '{print $1}' | grep -qx "$1" || conda create -y -n "$1" "python=$2"
+  # Private package cache per stage on LOCAL disk: stages running in parallel
+  # used to race while extracting the same package into the shared cache
+  # (InvalidArchiveError), and /tmp is much faster than an NFS home.
+  export CONDA_PKGS_DIRS="${TMPDIR:-/tmp}/conda-pkgs-$USER-$1"
+  mkdir -p "$CONDA_PKGS_DIRS"
+  if ! conda env list | awk '{print $1}' | grep -qx "$1"; then
+    rm -rf "$CONDA_DIR/envs/$1"   # leftovers from a failed create
+    conda create -y -n "$1" "python=$2"
+  fi
   conda activate "$1"
+  [ "$(python -c 'import sys; print(sys.prefix)')" = "$CONDA_DIR/envs/$1" ] \
+    || { echo "env $1 did not activate"; exit 1; }
   python -m pip install -U pip wheel setuptools ninja
 }
 
@@ -78,8 +91,11 @@ trellis)
   pip install fastapi uvicorn python-multipart
   cd "$HOME/TRELLIS.2"
   # setup.sh installs into the ACTIVE env when --new-env is not given.
+  # setup.sh isn't written for `set -e`/`set -u`; relax them while it runs.
+  set +eu
   # shellcheck disable=SC1091
   . ./setup.sh --basic --flash-attn --nvdiffrast --nvdiffrec --cumesh --o-voxel --flexgemm
+  set -eu
   python -c "import torch, trellis2, o_voxel; print('trellis OK', torch.__version__, torch.cuda.is_available())"
   ;;
 hunyuan)
