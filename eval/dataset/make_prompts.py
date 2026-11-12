@@ -10,7 +10,10 @@ head object (GENERIC below, keyed by T3Bench line number). Selection rule,
 fixed before any results:
   * the 20 objects of the original submission, then
   * the other 80 T3Bench lines in a random order (seed 20261112), taking each
-    one whose generic object is not already in the set, until there are 50.
+    one whose generic object is not already in the set, until there are 50;
+  * an object for which no openly licensed real photo met the photo criteria
+    (see curate_photos.py) is skipped, and the next object in the same order
+    takes its place.
 """
 from __future__ import annotations
 
@@ -19,12 +22,14 @@ import random
 from pathlib import Path
 
 SEED, N = 20261112, 50
+# Objects with no Wikimedia Commons candidate meeting the photo criteria.
+NO_PHOTO = {"map", "carnival mask"}
 ORIGINAL = [75, 76, 47, 65, 41, 29, 9, 21, 59, 8, 51, 70, 85, 91, 53, 73, 54, 18, 42, 17]
 OUT = Path(__file__).resolve().parent / "captions.csv"
 
 # T3Bench single-object line -> head object (attributes removed)
 GENERIC = {
-    1: "cactus", 2: "umbrella", 3: "rocking horse", 4: "dog", 5: "candlestick holder",
+    1: "cactus", 2: "umbrella", 3: "rocking horse", 4: "dog", 5: "candle holder",
     6: "pair of sneakers", 7: "mug", 8: "fire hydrant", 9: "saxophone", 10: "book",
     11: "sunflower", 12: "sandcastle", 13: "skateboard", 14: "flag", 15: "teddy bear",
     16: "watermelon", 17: "ring", 18: "doll", 19: "chameleon", 20: "pocket watch",
@@ -63,7 +68,7 @@ def main() -> None:
     for n in rest:
         if len(chosen) == N:
             break
-        if GENERIC[n] not in seen:
+        if GENERIC[n] not in seen and GENERIC[n] not in NO_PHOTO:
             chosen.append((n, "random")); seen.add(GENERIC[n])
     assert len(chosen) == N
     with open(OUT, "w", newline="") as fh:

@@ -39,3 +39,6 @@ eval/work/
 
 # Scratch dumps
 source_code.txt
+
+# photo-curation candidates (re-fetchable; picks.csv + manifest record the choice)
+eval/dataset/candidates/

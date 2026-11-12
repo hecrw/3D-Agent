@@ -94,12 +94,17 @@ single-object prompts reduced to their head object — the 20 objects of the
 original submission plus T3Bench lines in a seeded random order (seed
 20261112), skipping duplicates, until there are 50.
 
-Real photos (retrieved arm) are selected automatically, with no human picking,
-by `eval/dataset/curate_photos.py`: the first openly licensed Wikimedia
-Commons result that CLIP ViT-L/14 classifies as "a photo of a {object}"
-(vs drawing / painting / render / close-up of a part / text / something else,
-p >= 0.5). Source, author and licence of each photo are in
-`eval/dataset/images/manifest.csv`.
+Real photos (retrieved arm): for each object, ~8 openly licensed Wikimedia
+Commons candidates (CC0 / public domain / CC BY / CC BY-SA, >= 500 px) are
+fetched in Commons' search order (`eval/dataset/curate_photos.py fetch`), and
+the lowest-numbered candidate meeting five fixed criteria is taken — real
+photograph; whole object visible; the named object; object is the main
+subject (everyday background allowed); no watermark or overlaid text. Picks
+are recorded in `eval/dataset/picks.csv`; source page, author and licence of
+each photo in `eval/dataset/images/manifest.csv`. An object with no candidate
+meeting the criteria is replaced by the next object in the seeded order
+(`NO_PHOTO` in `make_prompts.py`). All selection happened before any 3D
+generation.
 
 ## Cost estimate
 
