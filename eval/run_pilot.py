@@ -155,6 +155,11 @@ _REVIEW: bool = False                    # review conditions: agent may score + 
 MAX_GENS_REVIEW = 3                      # 1 generation + at most 2 regenerations
 _GEN_COUNT = 0                           # 3D generation calls in the current cell
 _LAST_MESH: str | None = None
+_AGENT_ERRORS: list[str] = []            # "Agent error: ..." texts from the current cell
+
+
+class GeminiOutOfCredit(SystemExit):
+    """Out of credit: every remaining cell would fail too — stop the sweep."""
 
 _orig_restyle = tools.restyle_to_objaverse
 _orig_concept = tools.generate_concept_image
@@ -645,6 +650,9 @@ def _run_agent(user_message: str, tag: str = "") -> dict:
 
     def _consume(stream) -> None:
         for event in stream:
+            text = str(event.get("content", ""))
+            if event.get("type") == "text" and text.startswith("Agent error"):
+                _AGENT_ERRORS.append(text)
             if event.get("type") == "interrupt":
                 interrupts.append({k: event.get(k) for k in
                                    ("tool", "image_path", "allowed_decisions")})
@@ -872,7 +880,12 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
             # same text in every condition of the same review setting.
             message = f"{lead}{verbatim}{upload}\n\nGenerate a 3D model of: {caption}"
             _TOOL_LOG.clear()
+            _AGENT_ERRORS.clear()
             produced = _run_agent(message, tag)
+            if any("credits are depleted" in e or "RESOURCE_EXHAUSTED" in e for e in _AGENT_ERRORS):
+                raise GeminiOutOfCredit(
+                    "Gemini prepaid credit is depleted — stopping the sweep. Top up at "
+                    "ai.studio/projects, then rerun the same command (only unfinished cells run).")
             if produced.get("mesh"):
                 rec_f = _trace_file(tag)
                 rec_f.parent.mkdir(parents=True, exist_ok=True)
@@ -887,8 +900,10 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
             # surface the backend's own error (the agent only saw it as a tool message)
             errs = [r["content"] for r in trace.get("tool_results", [])
                     if r.get("name") in GEN_TOOLS and "error" in r.get("content", "").lower()]
+            agent_err = f" — agent: {_AGENT_ERRORS[-1][:300]}" if _AGENT_ERRORS else ""
             raise RuntimeError("agent did not produce a .glb mesh"
-                               + (f" — 3D tool error: {errs[-1][:300]}" if errs else ""))
+                               + (f" — 3D tool error: {errs[-1][:300]}" if errs else "")
+                               + agent_err)
         row["mesh_path"] = mesh
         row["restyled_path"] = produced.get("restyled") or ""
 
