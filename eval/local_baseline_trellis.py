@@ -42,6 +42,9 @@ def main() -> None:
     if not repo.is_dir():
         sys.exit(f"TRELLIS.2 repo not found at {repo} — see SETUP in this file's docstring.")
     sys.path.insert(0, str(repo))
+    # resolve BEFORE chdir: relative --images/--out would otherwise point inside the repo
+    args.images = str(Path(args.images).resolve())
+    args.out = str(Path(args.out).resolve())
     os.chdir(repo)  # some TRELLIS modules resolve assets relative to the repo root
 
     from PIL import Image

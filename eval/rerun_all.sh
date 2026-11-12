@@ -218,16 +218,17 @@ agent)
   ;;
 baselines)
   mode="${2:?usage: baselines retrieved|generated}"
-  imgs=eval/dataset/images
+  # absolute paths: the baseline scripts chdir into their model repo
+  imgs="$PWD/eval/dataset/images"
   if [ "$mode" = generated ]; then
-    imgs="$RUN_DIR/concepts"
+    imgs="$PWD/$RUN_DIR/concepts"
     n=$(ls "$imgs"/*.png 2>/dev/null | wc -l)
     [ "$n" -ge 20 ] || { echo "only $n/20 concept images in $imgs — finish 'agent generated' first"; exit 1; }
   fi
   export CUDA_VISIBLE_DEVICES=$GPU_BASELINES
-  crun "$TRELLIS_ENV"     python eval/local_baseline_trellis.py     --repo "$TRELLIS_REPO"     --images "$imgs" --out "$RUN_DIR/baseline_trellis2_$mode"
-  crun "$HUNYUAN_ENV"     python eval/local_baseline_hunyuan.py     --repo "$HUNYUAN_REPO"     --images "$imgs" --out "$RUN_DIR/baseline_hunyuan3d2_$mode"
-  crun "$PARTCRAFTER_ENV" python eval/local_baseline_partcrafter.py --repo "$PARTCRAFTER_REPO" --images "$imgs" --out "$RUN_DIR/baseline_partcrafter_$mode"
+  crun "$TRELLIS_ENV"     python eval/local_baseline_trellis.py     --repo "$TRELLIS_REPO"     --images "$imgs" --out "$PWD/$RUN_DIR/baseline_trellis2_$mode"
+  crun "$HUNYUAN_ENV"     python eval/local_baseline_hunyuan.py     --repo "$HUNYUAN_REPO"     --images "$imgs" --out "$PWD/$RUN_DIR/baseline_hunyuan3d2_$mode"
+  crun "$PARTCRAFTER_ENV" python eval/local_baseline_partcrafter.py --repo "$PARTCRAFTER_REPO" --images "$imgs" --out "$PWD/$RUN_DIR/baseline_partcrafter_$mode"
   ;;
 score)
   export CUDA_VISIBLE_DEVICES=$GPU_BASELINES   # CLIP scoring off the busy GPU 0

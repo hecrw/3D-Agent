@@ -117,7 +117,7 @@ hunyuan)
   clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2.git "$HOME/Hunyuan3D-2"
   new_env hunyuan 3.10
   pip install torch==2.5.1 torchvision==0.20.1 --index-url "$CU124"
-  pip install diffusers==0.32.2 transformers==4.49.0 accelerate einops omegaconf \
+  pip install pillow diffusers==0.32.2 transformers==4.49.0 accelerate einops omegaconf \
       trimesh pymeshlab pygltflib xatlas opencv-python-headless 'numpy<2' \
       'tqdm>=4.66.3' rembg onnxruntime-gpu 'huggingface_hub[hf_transfer]'
   cd "$HOME/Hunyuan3D-2"
