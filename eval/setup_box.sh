@@ -103,7 +103,14 @@ trellis)
   python -c "from transformers import DINOv3ViTModel, DINOv3ViTConfig; \
 m = DINOv3ViTModel(DINOv3ViTConfig(num_hidden_layers=1, hidden_size=64, num_attention_heads=2, intermediate_size=128)); \
 assert hasattr(m, 'layer') and hasattr(m, 'rope_embeddings'); print('DINOv3 layout OK')"
-  python -c "import torch, trellis2, o_voxel; print('trellis OK', torch.__version__, torch.cuda.is_available())"
+  # setup.sh's flash-attn source build can fail silently; TRELLIS.2's sparse
+  # attention needs flash_attn (or xformers). Fall back to the official
+  # prebuilt wheel matching torch 2.6 / CUDA 12 / py3.10 / this torch's C++ ABI.
+  if ! python -c "import flash_attn" 2>/dev/null; then
+    abi=$(python -c "import torch; print('TRUE' if torch._C._GLIBCXX_USE_CXX11_ABI else 'FALSE')")
+    pip install "https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abi${abi}-cp310-cp310-linux_x86_64.whl"
+  fi
+  python -c "import torch, flash_attn, trellis2, o_voxel; print('trellis OK', torch.__version__, 'flash_attn', flash_attn.__version__, torch.cuda.is_available())"
   ;;
 hunyuan)
   load_conda; use_buildtools

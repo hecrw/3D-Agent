@@ -953,7 +953,7 @@ def check_alignment(
             worst_view=None, per_view={},
         )
 
-    per_view = {name: round(float(s), 3) for (name, _), s in zip(items, sims)}
+    per_view = {name: round(float(s), 4) for (name, _), s in zip(items, sims)}
     mean = sum(per_view.values()) / len(per_view)
     worst_name = min(per_view, key=per_view.get)
     worst_score = per_view[worst_name]
@@ -968,7 +968,7 @@ def check_alignment(
             summary = f"Mesh weakly matches the prompt (mean score {mean:.2f})."
         return AlignmentReport(
             accept=False,
-            score=round(mean, 2),
+            score=float(mean),  # unrounded: the eval needs full precision
             summary=summary,
             next_action="regenerate",
             worst_view=worst_name,
@@ -977,7 +977,7 @@ def check_alignment(
 
     return AlignmentReport(
         accept=True,
-        score=round(mean, 2),
+        score=float(mean),  # unrounded: the eval needs full precision
         summary=f"Mesh matches the prompt across all views (mean {mean:.2f}).",
         next_action="proceed",
         worst_view=worst_name,

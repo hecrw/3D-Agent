@@ -457,6 +457,10 @@ def _score_ulip(mesh_path: str, caption: str) -> float:
     value is its 3D encoder) and scores it on GPU. Returns nan if the ULIP Modal
     app isn't deployed/reachable, so the sweep is unaffected.
     """
+    # On the GPU box ULIP-2 is scored afterwards, locally, by `rerun_all.sh ulip`
+    # (export_pointclouds -> local_ulip -> merge_ulip); skip the Modal call here.
+    if os.environ.get("SKIP_INLINE_ULIP") == "1":
+        return math.nan
     from ulip_client import score_ulip  # noqa: PLC0415
     return score_ulip(mesh_path, caption)
 
