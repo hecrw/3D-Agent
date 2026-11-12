@@ -57,8 +57,9 @@ new_env() {  # new_env <name> <python>
     conda create -y -n "$1" "python=$2"
   fi
   conda activate "$1"
-  [ "$(python -c 'import sys; print(sys.prefix)')" = "$CONDA_DIR/envs/$1" ] \
-    || { echo "env $1 did not activate"; exit 1; }
+  # compare RESOLVED paths: $HOME may be a symlink (e.g. /home/u -> /net/.../u)
+  [ "$(python -c 'import os, sys; print(os.path.realpath(sys.prefix))')" = "$(realpath "$CONDA_DIR/envs/$1")" ] \
+    || { echo "env $1 did not activate (python is $(command -v python))"; exit 1; }
   python -m pip install -U pip wheel setuptools ninja
 }
 
