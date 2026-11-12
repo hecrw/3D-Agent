@@ -805,7 +805,11 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
         _fill_provenance(row, trace, cond_name, style_prompt, mesh=produced.get("mesh"))
         mesh = produced["mesh"]
         if not mesh:
-            raise RuntimeError("agent did not produce a .glb mesh")
+            # surface the backend's own error (the agent only saw it as a tool message)
+            errs = [r["content"] for r in trace.get("tool_results", [])
+                    if r.get("name") in GEN_TOOLS and "error" in r.get("content", "").lower()]
+            raise RuntimeError("agent did not produce a .glb mesh"
+                               + (f" — 3D tool error: {errs[-1][:300]}" if errs else ""))
         row["mesh_path"] = mesh
         row["restyled_path"] = produced.get("restyled") or ""
 
