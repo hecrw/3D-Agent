@@ -16,6 +16,7 @@
 #   bash eval/rerun_all.sh baselines generated   # GPU3, after the generated arm (needs its concepts)
 #   bash eval/rerun_all.sh score            # CLIP + VLM score for baseline meshes
 #   bash eval/rerun_all.sh ulip             # ULIP-2 for every results CSV, GPU3
+#   bash eval/rerun_all.sh progress         # how far along each sweep is, recent errors, ETA
 #   bash eval/rerun_all.sh check            # fails loudly if any cell is missing/errored/unenforced
 #   # post-hoc metrics — run only AFTER every sweep above has finished:
 #   bash eval/rerun_all.sh t3bench          # T3Bench Quality + Alignment (t3bench env, GPU3)
@@ -286,6 +287,46 @@ t3bench)
   ;;
 judge)
   "$PY" eval/vlm_judge.py "$RUN_DIR" 2>&1 | tee -a "$RUN_DIR/logs/judge.log"
+  ;;
+progress)
+  "$PY" - "$RUN_DIR" <<'EOF'
+import csv, sys, time, pathlib, statistics
+run = pathlib.Path(sys.argv[1])
+caps = list(csv.DictReader(open("eval/dataset/captions.csv")))
+n_all, n_sub = len(caps), sum(r.get("source") == "submission" for r in caps)
+COND = {"raw": n_all, "all_on": n_all, "loo_lighting": n_all, "raw_review": n_sub, "all_on_review": n_sub}
+for mode in ("generated", "retrieved"):
+    f = run / f"results_{mode}.csv"
+    rows = list(csv.DictReader(open(f))) if f.exists() else []
+    ok = {(r["prompt"], r["condition"]) for r in rows if r["status"] == "ok"}
+    err = [r for r in rows if r["status"] == "error" and (r["prompt"], r["condition"]) not in ok]
+    total, done = sum(COND.values()), len(ok)
+    secs = [float(r["seconds"]) for r in rows if r["status"] == "ok" and r.get("seconds")]
+    eta = ""
+    if secs and done < total:
+        eta = f"  ~{(total - done) * statistics.median(secs) / 3600:.1f} h left (median {statistics.median(secs):.0f} s/cell)"
+    last = max((r.get("started_at", "") for r in rows), default="")
+    print(f"\n== agent {mode}: {done}/{total} cells ok ({100 * done / total:.0f}%){eta}")
+    if last:
+        print(f"   last cell started {last}")
+    for c, want in COND.items():
+        k = sum(1 for (_, cc) in ok if cc == c)
+        bar = "#" * int(20 * k / want) + "." * (20 - int(20 * k / want))
+        print(f"   {c:<14} [{bar}] {k}/{want}")
+    if err:
+        print(f"   {len(err)} cell(s) currently failed (retried on the next pass); latest:")
+        for r in err[-3:]:
+            print(f"     {r['condition']:<14} {r['prompt'][:30]:<30} {r['error'][:90]}")
+print("\n== baselines")
+for mode in ("retrieved", "generated"):
+    for bb in ("trellis2", "hunyuan3d2", "partcrafter"):
+        d = run / f"baseline_{bb}_{mode}"
+        k = len(list(d.glob("*.glb"))) if d.exists() else 0
+        print(f"   {bb:<12} {mode:<9} {k}/{n_all} meshes")
+EOF
+  echo; echo "== processes"
+  pgrep -af "run_pilot.py|local_baseline_|local_trellis_server|score_t3bench|vlm_judge|local_ulip" | sed 's/^/   /' | cut -c1-140 || echo "   none running"
+  echo; nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv,noheader | sed 's/^/   GPU /'
   ;;
 analyze)
   for csv in "$RUN_DIR"/results_*.csv; do echo "### $csv"; "$PY" eval/analyze.py "$csv"; done
