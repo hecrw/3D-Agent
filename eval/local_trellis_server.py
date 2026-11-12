@@ -65,29 +65,44 @@ def main() -> None:
     def health():
         return _info
 
+    import gc
+    import threading
+    from fastapi.responses import Response
+    gpu_lock = threading.Lock()   # one generation at a time on this GPU
+
+    # Plain `def` (not async): FastAPI runs it in a worker thread, so the
+    # health check GET / still answers while a generation is running.
     @app.post("/generate")
-    async def generate(
+    def generate(
         image: UploadFile = File(...),
         seed: int = Form(42),
         decimation_target: int = Form(1_000_000),
         texture_size: int = Form(4096),
         remesh: str = Form("true"),
     ):
-        data = await image.read()
-        img = Image.open(io.BytesIO(data)).convert("RGB")
-        mesh = pipeline.run(img, seed=seed)[0]  # honor the client's seed
-        mesh.simplify(16777216)  # nvdiffrast limit
-        glb = o_voxel.postprocess.to_glb(
-            vertices=mesh.vertices, faces=mesh.faces, attr_volume=mesh.attrs,
-            coords=mesh.coords, attr_layout=mesh.layout, voxel_size=mesh.voxel_size,
-            aabb=[[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]],
-            decimation_target=decimation_target, texture_size=texture_size,
-            remesh=(remesh.lower() == "true"), remesh_band=1, remesh_project=0,
-            verbose=False)
-        out = tempfile.NamedTemporaryFile(suffix=".glb", delete=False)
-        glb.export(out.name, extension_webp=True)
-        return FileResponse(out.name, media_type="model/gltf-binary",
-                            filename="model.glb")
+        data = image.file.read()
+        with gpu_lock:
+            img = Image.open(io.BytesIO(data)).convert("RGB")
+            mesh = pipeline.run(img, seed=seed)[0]  # honor the client's seed
+            mesh.simplify(16777216)  # nvdiffrast limit
+            glb = o_voxel.postprocess.to_glb(
+                vertices=mesh.vertices, faces=mesh.faces, attr_volume=mesh.attrs,
+                coords=mesh.coords, attr_layout=mesh.layout, voxel_size=mesh.voxel_size,
+                aabb=[[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]],
+                decimation_target=decimation_target, texture_size=texture_size,
+                remesh=(remesh.lower() == "true"), remesh_band=1, remesh_project=0,
+                verbose=False)
+            # Export, read back, and DELETE the temp file — leaving it behind
+            # leaked ~40 MB per request into /tmp. Then free memory: a server
+            # that runs for days must not grow request by request.
+            with tempfile.NamedTemporaryFile(suffix=".glb") as out:
+                glb.export(out.name, extension_webp=True)
+                payload = Path(out.name).read_bytes()
+            del mesh, glb, img
+            gc.collect()
+            torch.cuda.empty_cache()
+        return Response(content=payload, media_type="model/gltf-binary",
+                        headers={"Content-Disposition": 'attachment; filename="model.glb"'})
 
     uvicorn.run(app, host="0.0.0.0", port=args.port)
 

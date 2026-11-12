@@ -118,7 +118,7 @@ hunyuan)
   clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2.git "$HOME/Hunyuan3D-2"
   new_env hunyuan 3.10
   pip install torch==2.5.1 torchvision==0.20.1 --index-url "$CU124"
-  pip install pillow diffusers==0.32.2 transformers==4.49.0 accelerate einops omegaconf \
+  pip install pillow pybind11 diffusers==0.32.2 transformers==4.49.0 accelerate einops omegaconf \
       trimesh pymeshlab pygltflib xatlas opencv-python-headless 'numpy<2' \
       'tqdm>=4.66.3' rembg onnxruntime-gpu 'huggingface_hub[hf_transfer]'
   cd "$HOME/Hunyuan3D-2"
@@ -154,7 +154,14 @@ t3bench)
   git -C "$HOME/T3Bench" checkout 6367462cfd04467af772c168c5cd8570964b9df3
   new_env t3bench 3.10
   pip install torch==2.5.1 torchvision==0.20.1 --index-url "$CU124"
-  pip install image-reward 'transformers==4.46.3' accelerate sentencepiece \
+  # image-reward imports OpenAI's `clip` package but doesn't declare it. The PyPI
+  # `openai-clip` copy imports pkg_resources.packaging (gone from setuptools>=70);
+  # the upstream repo fixed that — install it at a pinned commit. ImageReward also
+  # imports diffusers: pin a release compatible with transformers 4.46 (newer
+  # diffusers needs Dinov2WithRegistersConfig from transformers >= 4.48).
+  pip install image-reward packaging \
+      'git+https://github.com/openai/CLIP.git@d05afc436d78f1c48dc0dbf8e5980a9d471f35f6' \
+      'transformers==4.46.3' 'diffusers==0.31.0' accelerate sentencepiece \
       pyrender trimesh google-genai python-dotenv numpy pillow
   PYOPENGL_PLATFORM=egl python -c "import ImageReward, transformers, pyrender; \
 pyrender.OffscreenRenderer(64, 64).delete(); print('t3bench OK (EGL render works)')"

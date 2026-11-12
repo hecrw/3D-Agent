@@ -504,7 +504,9 @@ def _run_local_trellis(base_url: str, image_path, out_path: str,
             files={"image": fh},
             data={"seed": str(seed), "decimation_target": str(decimation_target),
                   "texture_size": str(texture_size), "remesh": str(remesh).lower()},
-            timeout=1800,
+            # a normal local generation takes ~20-60 s; don't let a wedged server
+            # hold a sweep for half an hour (override: LOCAL_TRELLIS_TIMEOUT)
+            timeout=float(os.environ.get("LOCAL_TRELLIS_TIMEOUT", "600")),
         )
     resp.raise_for_status()
     with open(out_path, "wb") as out:
