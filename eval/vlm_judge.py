@@ -170,18 +170,36 @@ def judge(run_dir: Path, workers: int) -> Path:
     done = set()
     if out.exists():
         for r in csv.DictReader(open(out)):
-            if r["choice"] in ("1", "2"):
+            if r["choice"] in ("1", "2", "same"):
                 done.add((r["mode"], r["prompt"], r["sys_a"], r["sys_b"], r["order"], r["axis"]))
 
-    jobs = []
+    jobs, same = [], []
     for mode, by_prompt in systems.items():
         for prompt, sysmap in by_prompt.items():
             for a, b in planned_pairs(sysmap):
                 for order in ("ab", "ba"):
                     for axis in AXES:
-                        if (mode, prompt, a, b, order, axis) not in done:
-                            jobs.append((mode, prompt, a, b, order, axis, sysmap[a], sysmap[b]))
-    print(f"{len(jobs)} judge calls to make ({len(done)} cached)")
+                        if (mode, prompt, a, b, order, axis) in done:
+                            continue
+                        if Path(sysmap[a]).resolve() == Path(sysmap[b]).resolve():
+                            # identical mesh (e.g. the review loop kept the shared
+                            # first attempt): a tie by definition — don't ask the judge
+                            same.append(dict(mode=mode, prompt=prompt, sys_a=a, sys_b=b,
+                                             order=order, axis=axis, choice="same",
+                                             winner="tie", raw="identical mesh",
+                                             model="", mesh_a=sysmap[a], mesh_b=sysmap[b],
+                                             ts=time.strftime("%Y-%m-%dT%H:%M:%S")))
+                            continue
+                        jobs.append((mode, prompt, a, b, order, axis, sysmap[a], sysmap[b]))
+    print(f"{len(jobs)} judge calls to make ({len(done)} cached, "
+          f"{len(same)} identical-mesh ties recorded without a call)")
+    if same:
+        new = not out.exists() or out.stat().st_size == 0
+        with open(out, "a", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=PAIR_FIELDS)
+            if new:
+                w.writeheader()
+            w.writerows(same)
     if not jobs:
         return out
 
@@ -264,7 +282,9 @@ def summarize(run_dir: Path) -> Path:
     for (mode, prompt, a, b, axis), o in both.items():
         if len(o) < 2:
             continue                                # need both orders
-        if o["ab"] == o["ba"]:
+        if "tie" in (o["ab"], o["ba"]):
+            s = 0.5                                 # identical meshes
+        elif o["ab"] == o["ba"]:
             s = 1.0 if o["ab"] == a else 0.0
         else:
             s = 0.5                                 # orders disagree -> tie

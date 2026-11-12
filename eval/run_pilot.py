@@ -159,6 +159,58 @@ _LAST_MESH: str | None = None
 _orig_restyle = tools.restyle_to_objaverse
 _orig_concept = tools.generate_concept_image
 
+# ---------------------------------------------------------------------------
+# Per-cell artifact cache: a rerun of the same cell (crash, retry pass) reuses
+# anything identical it already produced instead of paying Gemini / the GPU
+# again. Keyed by WHAT was computed — input image CONTENT + exact parameters —
+# so a review retry with a new seed or an edited image is still generated
+# fresh. Scoped per OBJECT within a run (run id + input mode + object), so
+# identical work is shared across conditions — e.g. all_on_review starts from
+# exactly the restyled image and seed-42 mesh of all_on, and the review effect
+# is purely what the review loop adds. Conditions never collide because the
+# key includes the input content and every parameter (raw's input is the photo,
+# all_on's the restyle with the full prompt, loo_lighting's a different
+# prompt). Nothing is ever reused across runs or input modes.
+# ---------------------------------------------------------------------------
+_CACHE_DIR = agent.OUT / ".eval_cache"
+
+
+def _file_hash(path) -> str:
+    import hashlib
+    try:
+        return hashlib.sha1(Path(path).read_bytes()).hexdigest()[:16]
+    except OSError:
+        return f"missing:{path}"
+
+
+def _cache_file() -> Path:
+    obj_scope = (_EVAL_TAG or "untagged").split("__")[0]   # <run>_<mode><stem>
+    return _CACHE_DIR / f"{obj_scope}.json"
+
+
+def _trace_file(tag: str) -> Path:
+    """One record per CELL ({mesh, restyled, trace}). Not next to the mesh:
+    with per-object reuse, two cells can share the same mesh file."""
+    return agent.OUT / ".eval_traces" / f"{tag}.json"
+
+
+def _cache_get(key: str) -> str | None:
+    f = _cache_file()
+    if not f.exists():
+        return None
+    hit = json.loads(f.read_text()).get(key)
+    if hit and Path(hit).exists() and Path(hit).stat().st_size > 1024:
+        return hit
+    return None
+
+
+def _cache_put(key: str, path: str) -> None:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    f = _cache_file()
+    d = json.loads(f.read_text()) if f.exists() else {}
+    d[key] = str(path)
+    f.write_text(json.dumps(d, indent=1))
+
 
 def _eval_restyle(image_path, out_path=None, style_prompt=None):
     if _EVAL_STYLE_PROMPT is None:
@@ -166,10 +218,17 @@ def _eval_restyle(image_path, out_path=None, style_prompt=None):
                           "input": str(image_path)})
         print(f"[eval] raw condition: restyle is identity for {image_path}")
         return str(image_path)
-    _TOOL_LOG.append({"tool": "restyle", "mode": "enforced",
-                      "input": str(image_path), "prompt": _EVAL_STYLE_PROMPT})
-    return _orig_restyle(image_path, out_path=out_path,
-                         style_prompt=_EVAL_STYLE_PROMPT)
+    key = f"restyle|{_file_hash(image_path)}|{_EVAL_STYLE_PROMPT}"
+    hit = _cache_get(key)
+    entry = {"tool": "restyle", "input": str(image_path), "prompt": _EVAL_STYLE_PROMPT}
+    if hit:
+        print(f"[eval] reusing restyled image {Path(hit).name}")
+        _TOOL_LOG.append({**entry, "mode": "enforced", "reused": True, "path": hit})
+        return hit
+    out = _orig_restyle(image_path, out_path=out_path, style_prompt=_EVAL_STYLE_PROMPT)
+    _cache_put(key, out)
+    _TOOL_LOG.append({**entry, "mode": "enforced", "path": out})
+    return out
 
 
 def _eval_concept(prompt, out_path=None):
@@ -231,11 +290,21 @@ def _wrap_generator(name: str, fn):
             return _LAST_MESH
         kwargs["seed"] = default_seed + _GEN_COUNT
         _GEN_COUNT += 1
-        out = fn(*args, **kwargs)
+        params = {k: v for k, v in kwargs.items() if k not in ("out_path", "image_path", "mesh_path")}
+        key = (f"gen|{name}|{_file_hash(kwargs.get('image_path', ''))}|"
+               f"{_file_hash(kwargs['mesh_path']) if 'mesh_path' in kwargs else ''}|"
+               f"{json.dumps(params, sort_keys=True, default=str)}")
+        hit = _cache_get(key)
+        if hit:
+            print(f"[eval] reusing generated mesh {Path(hit).name} (same input + {name} params)")
+            out = hit
+        else:
+            out = fn(*args, **kwargs)
+            _cache_put(key, out)
         _LAST_MESH = out
         _TOOL_LOG.append({"tool": "generate", "backbone": name, "mode": "run",
                           "seed": kwargs["seed"], "input": kwargs.get("image_path"),
-                          "path": out})
+                          "path": out, "reused": bool(hit)})
         return out
     return wrapped
 
@@ -589,9 +658,12 @@ def _run_agent(user_message: str, tag: str = "") -> dict:
     # in parallel on one box (e.g. generated + retrieved arms on separate
     # GPUs) can never pick up each other's meshes.
     t = f"_{tag}_" if tag else "_"
+    # Prefer what this cell's (wrapped) tools actually returned: a reused mesh
+    # or restyled image predates `since`, so mtime alone would miss it.
+    restyles = [e["path"] for e in _TOOL_LOG if e.get("tool") == "restyle" and e.get("path")]
     return {
-        "mesh": _newest_after(f"*{t}*.glb", since),
-        "restyled": _newest_after(f"objaverse{t}*.png", since),
+        "mesh": _LAST_MESH or _newest_after(f"*{t}*.glb", since),
+        "restyled": (restyles[-1] if restyles else None) or _newest_after(f"objaverse{t}*.png", since),
         "trace": _extract_trace(session_id, interrupts),
     }
 
@@ -731,7 +803,7 @@ def _fill_provenance(row: dict, trace: dict, cond_name: str,
         ok = bool(restyles) and all(e.get("prompt") == style_prompt for e in restyles)
     row["condition_enforced"] = str(ok)
     if mesh:
-        row["trace_path"] = str(Path(mesh).with_suffix(".trace.json"))
+        row["trace_path"] = str(_trace_file(_EVAL_TAG))
 
 
 def run_one(caption: str, cond_name: str, instruction: str | None,
@@ -757,12 +829,12 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
         # trace sidecar exists — i.e. a cell whose generation finished but
         # whose scoring crashed. Never force a backbone: that would override
         # the agent's routing decision (the old trellis2-only fallback did).
-        produced = _existing_artifacts(tag) if tag else {"mesh": None}
-        sidecar = (Path(produced["mesh"]).with_suffix(".trace.json")
-                   if produced.get("mesh") else None)
-        if sidecar and sidecar.exists():
-            print(f"    reusing this run's mesh {Path(produced['mesh']).name}")
-            produced["trace"] = json.loads(sidecar.read_text())
+        rec_f = _trace_file(tag) if tag else None
+        rec = json.loads(rec_f.read_text()) if rec_f and rec_f.exists() else {}
+        if rec.get("mesh") and Path(rec["mesh"]).exists():
+            print(f"    reusing this cell's mesh {Path(rec['mesh']).name}")
+            produced = {"mesh": rec["mesh"], "restyled": rec.get("restyled"),
+                        "trace": rec.get("trace", {})}
             row["reused_mesh"] = "True"
         else:
             # Build the user message. The eval instruction sets the restyle axes
@@ -802,8 +874,11 @@ def run_one(caption: str, cond_name: str, instruction: str | None,
             _TOOL_LOG.clear()
             produced = _run_agent(message, tag)
             if produced.get("mesh"):
-                Path(produced["mesh"]).with_suffix(".trace.json").write_text(
-                    json.dumps(produced["trace"], indent=1, default=str))
+                rec_f = _trace_file(tag)
+                rec_f.parent.mkdir(parents=True, exist_ok=True)
+                rec_f.write_text(json.dumps(
+                    {"mesh": produced["mesh"], "restyled": produced.get("restyled"),
+                     "trace": produced["trace"]}, indent=1, default=str))
 
         trace = produced.get("trace") or {}
         _fill_provenance(row, trace, cond_name, style_prompt, mesh=produced.get("mesh"))
