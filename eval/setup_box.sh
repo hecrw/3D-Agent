@@ -97,6 +97,12 @@ trellis)
   # shellcheck disable=SC1091
   . ./setup.sh --basic --flash-attn --nvdiffrast --nvdiffrec --cumesh --o-voxel --flexgemm
   set -eu
+  # setup.sh installs transformers UNPINNED; newer releases moved DINOv3ViTModel's
+  # layers, breaking TRELLIS.2 ("'DINOv3ViTModel' object has no attribute 'layer'")
+  pip install "transformers==4.57.1"
+  python -c "from transformers import DINOv3ViTModel, DINOv3ViTConfig; \
+m = DINOv3ViTModel(DINOv3ViTConfig(num_hidden_layers=1, hidden_size=64, num_attention_heads=2, intermediate_size=128)); \
+assert hasattr(m, 'layer') and hasattr(m, 'rope_embeddings'); print('DINOv3 layout OK')"
   python -c "import torch, trellis2, o_voxel; print('trellis OK', torch.__version__, torch.cuda.is_available())"
   ;;
 hunyuan)
