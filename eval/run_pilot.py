@@ -816,12 +816,38 @@ def _fill_provenance(row: dict, trace: dict, cond_name: str,
         row["trace_path"] = str(_trace_file(_EVAL_TAG))
 
 
+def _wait_for_trellis(limit_s: float = 900) -> None:
+    """Block until the local TRELLIS.2 server answers. After a watchdog exit
+    the server needs 1-2 min to reload weights; without this wait every cell
+    started in that window fails instantly with "Connection refused"."""
+    import urllib.request
+    url = os.environ.get("LOCAL_TRELLIS_URL")
+    if not url:
+        return
+    t0, warned = time.time(), False
+    while True:
+        try:
+            urllib.request.urlopen(url.rstrip("/") + "/", timeout=5).read()
+            if warned:
+                print(f"[eval] TRELLIS server back after {time.time() - t0:.0f} s", flush=True)
+            return
+        except Exception:
+            if time.time() - t0 > limit_s:
+                raise SystemExit(f"[eval] TRELLIS server {url} down for {limit_s:.0f} s — "
+                                 "stopping the sweep (check logs/trellis_*.log)")
+            if not warned:
+                print(f"[eval] waiting for TRELLIS server {url} ...", flush=True)
+                warned = True
+            time.sleep(10)
+
+
 def run_one(caption: str, cond_name: str, instruction: str | None,
             tag: str = "", photo_path: str | None = None,
             style_prompt: str | None = None, concept_cache: Path | None = None,
             prov: dict | None = None) -> dict:
     global _EVAL_TAG, _EVAL_STYLE_PROMPT, _EVAL_CAPTION, _CONCEPT_CACHE_PATH
     global _REVIEW, _GEN_COUNT, _LAST_MESH
+    _wait_for_trellis()
     _REVIEW = cond_name.endswith("_review")
     _GEN_COUNT, _LAST_MESH = 0, None
     _EVAL_TAG = tag  # the patched agent._stamp() reads this to name media
