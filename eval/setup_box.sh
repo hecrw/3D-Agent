@@ -133,11 +133,13 @@ partcrafter)
   new_env partcrafter 3.11
   pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url "$CU124"
   pip install torch-cluster -f https://data.pyg.org/whl/torch-2.5.1+cu124.html
-  pip install scikit-learn diffusers transformers einops 'huggingface_hub[hf_transfer]' \
-      opencv-python-headless trimesh omegaconf scikit-image numpy==1.26.4 peft \
+  # pin diffusers/transformers/peft: current releases need torch>=2.6 and then
+  # fail with "cannot import name 'AutoencoderKL'" on this torch 2.5.1 env
+  pip install scikit-learn 'diffusers==0.32.2' 'transformers==4.49.0' einops 'huggingface_hub[hf_transfer]' \
+      opencv-python-headless trimesh omegaconf scikit-image numpy==1.26.4 'peft==0.14.0' \
       jaxtyping typeguard matplotlib imageio imageio-ffmpeg pyrender colormaps \
       accelerate pillow
-  python -c "import torch, torch_cluster; print('partcrafter OK', torch.__version__, torch.cuda.is_available())"
+  python -c "import torch, torch_cluster; from diffusers.models import AutoencoderKL; print('partcrafter OK', torch.__version__, torch.cuda.is_available())"
   ;;
 ulip)
   load_conda

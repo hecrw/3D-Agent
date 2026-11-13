@@ -105,10 +105,38 @@ def _gemini() -> genai.Client:
 
 
 def _extract_image_bytes(response) -> Optional[bytes]:
-    for part in response.candidates[0].content.parts:
+    # A blocked/empty response has no candidates or content=None.
+    cands = getattr(response, "candidates", None) or []
+    content = getattr(cands[0], "content", None) if cands else None
+    for part in (getattr(content, "parts", None) or []):
         if part.inline_data is not None:
             return part.inline_data.data
     return None
+
+
+def _why_empty(response) -> str:
+    cands = getattr(response, "candidates", None) or []
+    fr = getattr(cands[0], "finish_reason", None) if cands else None
+    fb = getattr(response, "prompt_feedback", None)
+    return f"finish_reason={fr}, prompt_feedback={fb}"
+
+
+def _generate_image(contents, what: str, attempts: int = 3) -> bytes:
+    """Gemini image call that retries an EMPTY response (no image returned,
+    e.g. finish_reason=OTHER/IMAGE_SAFETY) up to `attempts` times, bumping the
+    seed by +1 each retry (printed, so the seed used is in the log)."""
+    cfg = _image_config()
+    base = cfg.seed
+    for k in range(attempts):
+        if k:
+            cfg.seed = (base or 0) + k
+            print(f"[gemini] {what}: empty response, retry {k} with seed {cfg.seed}")
+        resp = _gemini().models.generate_content(
+            model=GEMINI_IMAGE_MODEL, contents=contents, config=cfg)
+        data = _extract_image_bytes(resp)
+        if data:
+            return data
+    raise RuntimeError(f"Gemini returned no image for {what} after {attempts} tries ({_why_empty(resp)})")
 
 
 def _save_png(data: bytes, out_path: str | Path) -> str:
@@ -125,14 +153,7 @@ def generate_concept_image(prompt: str,
     """
     out_path = out_path or f"concept_{int(time.time())}.png"
     print(f"[gemini] concept: {prompt!r}")
-    resp = _gemini().models.generate_content(
-        model=GEMINI_IMAGE_MODEL,
-        contents=prompt,
-        config=_image_config(),
-    )
-    data = _extract_image_bytes(resp)
-    if not data:
-        raise RuntimeError("Gemini returned no image for concept prompt")
+    data = _generate_image(prompt, "concept")
     path = _save_png(data, out_path)
     print(f"[gemini] saved {path}")
     return path
@@ -149,14 +170,7 @@ def restyle_to_objaverse(image_path: str | Path,
     out_path = out_path or f"objaverse_{int(time.time())}.png"
     print(f"[gemini] restyle: {image_path}")
     src = _gemini().files.upload(file=image_path)
-    resp = _gemini().models.generate_content(
-        model=GEMINI_IMAGE_MODEL,
-        contents=[src, style_prompt],
-        config=_image_config(),
-    )
-    data = _extract_image_bytes(resp)
-    if not data:
-        raise RuntimeError("Gemini returned no image for restyle")
+    data = _generate_image([src, style_prompt], "restyle")
     path = _save_png(data, out_path)
     print(f"[gemini] saved {path}")
     return path
@@ -176,14 +190,7 @@ def edit_image(image_path: str | Path,
     out_path = out_path or f"edited_{int(time.time())}.png"
     print(f"[gemini] edit: {image_path} :: {instruction!r}")
     src = _gemini().files.upload(file=image_path)
-    resp = _gemini().models.generate_content(
-        model=GEMINI_IMAGE_MODEL,
-        contents=[src, instruction],
-        config=_image_config(),
-    )
-    data = _extract_image_bytes(resp)
-    if not data:
-        raise RuntimeError("Gemini returned no image for edit")
+    data = _generate_image([src, instruction], "edit")
     path = _save_png(data, out_path)
     print(f"[gemini] saved {path}")
     return path

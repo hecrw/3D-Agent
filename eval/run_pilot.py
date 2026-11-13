@@ -293,7 +293,9 @@ def _wrap_generator(name: str, fn):
                               "returned": _LAST_MESH})
             print(f"[eval] generation cap ({cap}) reached — returning last mesh")
             return _LAST_MESH
-        kwargs["seed"] = default_seed + _GEN_COUNT
+        # EVAL_SEED_OFFSET: rerun cells whose seed-42 input reproducibly hangs
+        # the backbone with a different (logged) seed
+        kwargs["seed"] = default_seed + int(os.environ.get("EVAL_SEED_OFFSET", "0")) + _GEN_COUNT
         _GEN_COUNT += 1
         params = {k: v for k, v in kwargs.items() if k not in ("out_path", "image_path", "mesh_path")}
         key = (f"gen|{name}|{_file_hash(kwargs.get('image_path', ''))}|"
