@@ -724,6 +724,10 @@ def _backbone_info(trace: dict) -> dict:
     seed = inspect.signature(fn).parameters.get("seed")
     if name.startswith("tool_trellis2") and os.environ.get("TRELLIS_REMESH", "").lower() == "false":
         args = {**args, "remesh": False, "remesh_fallback": True}   # logged fallback
+    if name.startswith("tool_trellis2"):
+        for env, key in (("TRELLIS_DECIMATION", "decimation_target"), ("TRELLIS_TEXTURE_SIZE", "texture_size")):
+            if os.environ.get(env):
+                args = {**args, key: int(os.environ[env]), "export_fallback": True}
     # strip the workspace host so the CSV doesn't leak the account name
     ep_short = ep.split(".modal.run")[-1] if ".modal.run" in ep else ep
     return {"backbone_tool": name.replace("tool_", ""),

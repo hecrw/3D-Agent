@@ -508,7 +508,10 @@ def _run_local_trellis(base_url: str, image_path, out_path: str,
     # (cumesh, in the GLB export) never finishes; model, image and seed unchanged
     if os.environ.get("TRELLIS_REMESH", "true").lower() == "false":
         remesh = False
-    print(f"[trellis2] local -> {base_url}/generate ({image_path}) remesh={remesh}")
+    # lighter GLB export for inputs whose full-resolution export never finishes
+    decimation_target = int(os.environ.get("TRELLIS_DECIMATION", decimation_target))
+    texture_size = int(os.environ.get("TRELLIS_TEXTURE_SIZE", texture_size))
+    print(f"[trellis2] local -> {base_url}/generate ({image_path}) remesh={remesh} decimation={decimation_target} tex={texture_size}")
     with open(str(image_path), "rb") as fh:
         resp = _session.post(
             f"{base_url.rstrip('/')}/generate",

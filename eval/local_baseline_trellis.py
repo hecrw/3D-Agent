@@ -70,7 +70,9 @@ def main() -> None:
     limit = float(os.environ.get("TRELLIS_GEN_TIMEOUT", "480"))
     # TRELLIS_REMESH=false: fallback for inputs whose remeshing never finishes
     REMESH = os.environ.get("TRELLIS_REMESH", "true").lower() != "false"
-    print(f"remesh={REMESH}")
+    DECIM = int(os.environ.get("TRELLIS_DECIMATION", "1000000"))
+    TEX = int(os.environ.get("TRELLIS_TEXTURE_SIZE", "4096"))
+    print(f"remesh={REMESH} decimation={DECIM} tex={TEX}")
     marker, failed_f = out_dir / ".inprogress", out_dir / "failed.txt"
     if marker.exists():
         stem = marker.read_text().strip()
@@ -102,7 +104,7 @@ def main() -> None:
                 vertices=mesh.vertices, faces=mesh.faces, attr_volume=mesh.attrs,
                 coords=mesh.coords, attr_layout=mesh.layout, voxel_size=mesh.voxel_size,
                 aabb=[[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]],
-                decimation_target=1000000, texture_size=4096,
+                decimation_target=DECIM, texture_size=TEX,
                 remesh=REMESH, remesh_band=1, remesh_project=0, verbose=False)
             glb.export(str(out_glb), extension_webp=True)
             print(f"    -> {out_glb}")
