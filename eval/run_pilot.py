@@ -722,6 +722,8 @@ def _backbone_info(trace: dict) -> dict:
               else tools.PARTCRAFTER_OBJ_URL + "/generate")
         fn = tools.partcrafter
     seed = inspect.signature(fn).parameters.get("seed")
+    if name.startswith("tool_trellis2") and os.environ.get("TRELLIS_REMESH", "").lower() == "false":
+        args = {**args, "remesh": False, "remesh_fallback": True}   # logged fallback
     # strip the workspace host so the CSV doesn't leak the account name
     ep_short = ep.split(".modal.run")[-1] if ".modal.run" in ep else ep
     return {"backbone_tool": name.replace("tool_", ""),

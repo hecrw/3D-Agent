@@ -504,7 +504,11 @@ def _run_local_trellis(base_url: str, image_path, out_path: str,
                        texture_size: int, remesh: bool) -> str:
     """Post the image to a local TRELLIS HTTP server (eval/local_trellis_server.py)
     and save the returned GLB. Synchronous — no Modal submit/poll/volume dance."""
-    print(f"[trellis2] local -> {base_url}/generate ({image_path})")
+    # TRELLIS_REMESH=false: fallback for the few inputs whose remeshing step
+    # (cumesh, in the GLB export) never finishes; model, image and seed unchanged
+    if os.environ.get("TRELLIS_REMESH", "true").lower() == "false":
+        remesh = False
+    print(f"[trellis2] local -> {base_url}/generate ({image_path}) remesh={remesh}")
     with open(str(image_path), "rb") as fh:
         resp = _session.post(
             f"{base_url.rstrip('/')}/generate",

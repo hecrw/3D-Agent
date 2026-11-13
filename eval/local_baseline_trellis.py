@@ -68,6 +68,9 @@ def main() -> None:
     # (rerun_all.sh loops) that image is recorded in failed.txt and skipped.
     import threading
     limit = float(os.environ.get("TRELLIS_GEN_TIMEOUT", "480"))
+    # TRELLIS_REMESH=false: fallback for inputs whose remeshing never finishes
+    REMESH = os.environ.get("TRELLIS_REMESH", "true").lower() != "false"
+    print(f"remesh={REMESH}")
     marker, failed_f = out_dir / ".inprogress", out_dir / "failed.txt"
     if marker.exists():
         stem = marker.read_text().strip()
@@ -100,7 +103,7 @@ def main() -> None:
                 coords=mesh.coords, attr_layout=mesh.layout, voxel_size=mesh.voxel_size,
                 aabb=[[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]],
                 decimation_target=1000000, texture_size=4096,
-                remesh=True, remesh_band=1, remesh_project=0, verbose=False)
+                remesh=REMESH, remesh_band=1, remesh_project=0, verbose=False)
             glb.export(str(out_glb), extension_webp=True)
             print(f"    -> {out_glb}")
         except Exception as e:
