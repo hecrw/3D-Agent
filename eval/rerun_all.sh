@@ -267,9 +267,12 @@ ulip)
   export CUDA_VISIBLE_DEVICES=$GPU_ULIP
   for csv in "$RUN_DIR"/results_*.csv; do
     name=$(basename "$csv" .csv)
-    pcs="$RUN_DIR/pointclouds/$name"
+    pcs="$PWD/$RUN_DIR/pointclouds/$name"   # absolute: local_ulip.py chdirs into ~/ULIP
     "$PY" eval/export_pointclouds.py "$csv" "$pcs"
-    crun "$ULIP_ENV" python eval/local_ulip.py --pointclouds "$pcs" --out "$RUN_DIR/ulip_$name.csv"
+    crun "$ULIP_ENV" python eval/local_ulip.py --pointclouds "$pcs" --out "$PWD/$RUN_DIR/ulip_$name.csv"
+    n_ok=$(grep -c ',[-0-9.]\+$' "$RUN_DIR/ulip_$name.csv" || true)
+    echo "[ulip] $name: $n_ok scored"
+    [ "$n_ok" -gt 0 ] || { echo "[ulip] no scores for $name — see the FAILED lines above"; exit 1; }
     "$PY" eval/merge_ulip.py "$csv" "$RUN_DIR/ulip_$name.csv"
   done
   ;;

@@ -120,7 +120,10 @@ def main() -> None:
     ap.add_argument("--out", default=str(EVAL_DIR / "ulip_scores.csv"))
     args = ap.parse_args()
 
-    pc_dir = pathlib.Path(args.pointclouds)
+    # resolve BEFORE load_model() chdirs into the ULIP repo: relative paths
+    # would otherwise point inside ~/ULIP (every row FAILED -> empty scores)
+    pc_dir = pathlib.Path(args.pointclouds).resolve()
+    args.out = str(pathlib.Path(args.out).resolve())
     manifest = pc_dir / "manifest.csv"
     if not manifest.exists():
         sys.exit(f"{manifest} not found — run export_pointclouds.py first.")
