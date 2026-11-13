@@ -244,7 +244,12 @@ baselines)
     [ "$n" -ge 20 ] || { echo "only $n/20 concept images in $imgs — finish 'agent generated' first"; exit 1; }
   fi
   export CUDA_VISIBLE_DEVICES=$GPU_BASELINES
-  crun "$TRELLIS_ENV"     python eval/local_baseline_trellis.py     --repo "$TRELLIS_REPO"     --images "$imgs" --out "$PWD/$RUN_DIR/baseline_trellis2_$mode"
+  # exit code 3 = watchdog fired on a hanging input: rerun to record it and continue
+  for _ in $(seq 1 20); do
+    crun "$TRELLIS_ENV" python eval/local_baseline_trellis.py --repo "$TRELLIS_REPO" --images "$imgs" --out "$PWD/$RUN_DIR/baseline_trellis2_$mode" && break
+    rc=$?; [ "$rc" -eq 3 ] || { echo "TRELLIS.2 baseline failed (exit $rc)"; exit "$rc"; }
+    echo "[baselines] TRELLIS.2 watchdog fired — restarting to skip that input"
+  done
   crun "$HUNYUAN_ENV"     python eval/local_baseline_hunyuan.py     --repo "$HUNYUAN_REPO"     --images "$imgs" --out "$PWD/$RUN_DIR/baseline_hunyuan3d2_$mode"
   crun "$PARTCRAFTER_ENV" python eval/local_baseline_partcrafter.py --repo "$PARTCRAFTER_REPO" --images "$imgs" --out "$PWD/$RUN_DIR/baseline_partcrafter_$mode"
   ;;
@@ -288,6 +293,13 @@ for f in sorted(have):
     conds = ["baseline"] if "baseline" in f else COND
     # review conditions run on the 20 submission objects only
     want = [(p, c) for c in conds for p in caps if not c.endswith("_review") or p in review_caps]
+    if "baseline" in f:   # inputs a backbone hung on (watchdog) are recorded, not missing
+        ff = run / f.replace("results_", "").replace(".csv", "") / "failed.txt"
+        stem2cap = {r["filename"].rsplit(".", 1)[0]: r["caption"] for r in rows_c}
+        known = {stem2cap.get(l.split("\t")[0]) for l in ff.read_text().splitlines()} if ff.exists() else set()
+        if known:
+            print(f"{f}: {len(known)} known backbone failure(s): {sorted(k for k in known if k)}")
+        want = [(p, c) for p, c in want if p not in known]
     missing = [(p, c) for p, c in want if (p, c) not in ok]
     noulip = [r for r in rows if r["status"] == "ok" and not r["ulip_mean"]]
     unenf = [r for r in rows if r["status"] == "ok" and r.get("condition_enforced") != "True"]
