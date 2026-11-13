@@ -69,6 +69,11 @@ def main() -> None:
     import threading
     from fastapi.responses import Response
     gpu_lock = threading.Lock()   # one generation at a time on this GPU
+    # Watchdog: a generation normally takes 20-60 s. If one runs past this
+    # limit (e.g. a pathological input stuck in the CPU-side GLB export), the
+    # process EXITS so the restart loop in rerun_all.sh brings up a fresh
+    # server — otherwise one stuck request blocks every later request forever.
+    GEN_LIMIT_S = float(os.environ.get("TRELLIS_GEN_TIMEOUT", "480"))
 
     # Plain `def` (not async): FastAPI runs it in a worker thread, so the
     # health check GET / still answers while a generation is running.
@@ -81,7 +86,16 @@ def main() -> None:
         remesh: str = Form("true"),
     ):
         data = image.file.read()
+        name = getattr(image, "filename", "") or "?"
         with gpu_lock:
+            def _wedged():
+                print(f"[watchdog] generation for {name!r} exceeded {GEN_LIMIT_S:.0f} s "
+                      "— exiting so the server restarts", flush=True)
+                os._exit(3)
+            watchdog = threading.Timer(GEN_LIMIT_S, _wedged)
+            watchdog.daemon = True
+            watchdog.start()
+            t0 = __import__("time").time()
             img = Image.open(io.BytesIO(data)).convert("RGB")
             mesh = pipeline.run(img, seed=seed)[0]  # honor the client's seed
             mesh.simplify(16777216)  # nvdiffrast limit
@@ -98,6 +112,8 @@ def main() -> None:
             with tempfile.NamedTemporaryFile(suffix=".glb") as out:
                 glb.export(out.name, extension_webp=True)
                 payload = Path(out.name).read_bytes()
+            watchdog.cancel()
+            print(f"[timing] {name}: {__import__('time').time() - t0:.1f} s", flush=True)
             del mesh, glb, img
             gc.collect()
             torch.cuda.empty_cache()

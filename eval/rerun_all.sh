@@ -22,6 +22,7 @@
 #   bash eval/rerun_all.sh t3bench          # T3Bench Quality + Alignment (t3bench env, GPU3)
 #   bash eval/rerun_all.sh judge            # pairwise VLM judge, Gen3DEval protocol + Elo
 #   bash eval/rerun_all.sh analyze
+#   bash eval/rerun_all.sh probe <image> [port]   # time one image through TRELLIS.2 directly
 #   bash eval/rerun_all.sh stop-servers
 #
 # The agent may also route to Hunyuan3D-2 / PartCrafter, which it calls on
@@ -173,13 +174,20 @@ except Exception as e:
                      "Request access at https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m\n"
                      "then log in on this box:  .venv/bin/hf auth login")
 EOF
-  declare -A PIDS=()
+  declare -A PIDS=() START=()
   for pair in "$GPU_TRELLIS_GEN:$PORT_GEN" "$GPU_TRELLIS_RET:$PORT_RET"; do
     gpu=${pair%%:*}; port=${pair##*:}
     if curl -sf "http://127.0.0.1:$port/" >/dev/null; then echo "server :$port already up"; continue; fi
-    CUDA_VISIBLE_DEVICES=$gpu nohup conda run --no-capture-output -n "$TRELLIS_ENV" \
-      python eval/local_trellis_server.py --repo "$TRELLIS_REPO" --port "$port" \
-      > "$RUN_DIR/logs/trellis_$port.log" 2>&1 &
+    START[$port]=$(( $(wc -l < "$RUN_DIR/logs/trellis_$port.log" 2>/dev/null || echo 0) + 1 ))
+    # restart loop: the server exits on its own watchdog (a generation stuck
+    # past TRELLIS_GEN_TIMEOUT) and is brought straight back up. The trailing
+    # "trellis_server_loop" argument only tags the loop so stop-servers finds it.
+    CUDA_VISIBLE_DEVICES=$gpu nohup bash -c '
+      while true; do
+        conda run --no-capture-output -n "$0" python eval/local_trellis_server.py --repo "$1" --port "$2"
+        echo "[loop] server :$2 exited ($?) at $(date +%T) — restarting in 5 s"; sleep 5
+      done' "$TRELLIS_ENV" "$TRELLIS_REPO" "$port" trellis_server_loop \
+      >> "$RUN_DIR/logs/trellis_$port.log" 2>&1 &
     PIDS[$port]=$!
     echo "started TRELLIS on GPU$gpu :$port (log $RUN_DIR/logs/trellis_$port.log)"
   done
@@ -187,15 +195,24 @@ EOF
   for port in "$PORT_GEN" "$PORT_RET"; do
     for _ in $(seq 1 120); do
       curl -sf "http://127.0.0.1:$port/" && echo && break
-      if [ -n "${PIDS[$port]:-}" ] && ! kill -0 "${PIDS[$port]}" 2>/dev/null; then
-        echo "server :$port DIED — last log lines:"; tail -n 15 "$RUN_DIR/logs/trellis_$port.log"; exit 1
+      if [ -n "${PIDS[$port]:-}" ] && grep -q "\[loop\] server :$port exited" <(tail -n "+${START[$port]}" "$RUN_DIR/logs/trellis_$port.log"); then
+        echo "server :$port crashed while starting — last log lines:"; tail -n 20 "$RUN_DIR/logs/trellis_$port.log"
+        echo "(stopping the restart loops: bash eval/rerun_all.sh stop-servers)"; bash "$0" stop-servers; exit 1
       fi
       sleep 10
     done
   done
   ;;
 stop-servers)
-  pkill -f local_trellis_server.py && echo stopped || echo "none running"
+  pkill -f trellis_server_loop; pkill -f local_trellis_server.py && echo stopped || echo "none running"
+  ;;
+probe)
+  # Time ONE image straight through a TRELLIS.2 server, bypassing the agent:
+  #   bash eval/rerun_all.sh probe <image> [port]
+  img="${2:?usage: probe <image> [port]}"; port="${3:-$PORT_GEN}"
+  echo "probing :$port with $img (limit 600 s)..."
+  curl -s -o /dev/null -m 600 -w "HTTP %{http_code}  %{time_total}s  %{size_download} bytes\n" \
+    -F "image=@$img" -F seed=42 "http://127.0.0.1:$port/generate" || echo "no answer within 600 s"
   ;;
 smoke)
   export LOCAL_TRELLIS_URL="http://127.0.0.1:$PORT_RET" AGENT_CKPT_PATH="$PWD/eval/runs/smoke_ckpt.sqlite3"
