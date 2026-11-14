@@ -109,6 +109,10 @@ def load_model(ulip_dir: pathlib.Path):
     sd = {k.replace("module.", ""): v for k, v in sd.items()}
     rep = model.load_state_dict(sd, strict=False)
     print(f"loaded; missing={len(rep.missing_keys)} unexpected={len(rep.unexpected_keys)}")
+    # the frozen open_clip towers are loaded from their own pretrained weights and
+    # are not in the ULIP-2 checkpoint; anything ELSE missing means a bad load
+    other = [k for k in rep.missing_keys if not k.startswith("open_clip_model.")]
+    print(f"missing outside open_clip_model.*: {len(other)} {other[:5]}")
     return model
 
 

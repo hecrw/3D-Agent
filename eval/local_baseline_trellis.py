@@ -85,7 +85,8 @@ def main() -> None:
 
     for i, p in enumerate(imgs, 1):
         out_glb = out_dir / f"{p.stem}.glb"
-        if out_glb.exists():
+        tmp_glb = out_glb.with_suffix('.tmp.glb')
+        if out_glb.exists() and out_glb.stat().st_size >= 1024:
             print(f"[{i}/{len(imgs)}] skip (done) {p.stem}")
             continue
         if p.stem in failed:
@@ -106,7 +107,7 @@ def main() -> None:
                 aabb=[[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]],
                 decimation_target=DECIM, texture_size=TEX,
                 remesh=REMESH, remesh_band=1, remesh_project=0, verbose=False)
-            glb.export(str(out_glb), extension_webp=True)
+            glb.export(str(tmp_glb), extension_webp=True); tmp_glb.replace(out_glb)
             print(f"    -> {out_glb}")
         except Exception as e:
             traceback.print_exc()

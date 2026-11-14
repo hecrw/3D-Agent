@@ -270,7 +270,8 @@ ulip)
     pcs="$PWD/$RUN_DIR/pointclouds/$name"   # absolute: local_ulip.py chdirs into ~/ULIP
     "$PY" eval/export_pointclouds.py "$csv" "$pcs"
     crun "$ULIP_ENV" python eval/local_ulip.py --pointclouds "$pcs" --out "$PWD/$RUN_DIR/ulip_$name.csv"
-    n_ok=$(grep -c ',[-0-9.]\+$' "$RUN_DIR/ulip_$name.csv" || true)
+    # csv module writes \r\n line endings, so don't anchor on $
+    n_ok=$(grep -cE ',-?[0-9]+\.[0-9]+' "$RUN_DIR/ulip_$name.csv" || true)
     echo "[ulip] $name: $n_ok scored"
     [ "$n_ok" -gt 0 ] || { echo "[ulip] no scores for $name — see the FAILED lines above"; exit 1; }
     "$PY" eval/merge_ulip.py "$csv" "$RUN_DIR/ulip_$name.csv"

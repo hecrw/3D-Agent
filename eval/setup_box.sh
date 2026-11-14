@@ -145,7 +145,8 @@ ulip)
   load_conda
   new_env ulip 3.10
   pip install torch==2.5.1 torchvision==0.20.1 --index-url "$CU124"
-  pip install open_clip_torch==2.24.0 timm easydict pyyaml numpy 'huggingface_hub[hf_transfer]'
+  # h5py/termcolor/tqdm/scipy: imported by ULIP's own modules (models -> data -> utils)
+  pip install open_clip_torch==2.24.0 timm easydict pyyaml numpy h5py termcolor tqdm scipy ftfy regex matplotlib 'huggingface_hub[hf_transfer]'
   python -c "import torch, open_clip; print('ulip OK', torch.__version__, torch.cuda.is_available())"
   ;;
 t3bench)

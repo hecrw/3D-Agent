@@ -74,7 +74,8 @@ def main() -> None:
 
     for i, p in enumerate(imgs, 1):
         out_glb = out_dir / f"{p.stem}.glb"
-        if out_glb.exists():
+        tmp_glb = out_glb.with_suffix('.tmp.glb')
+        if out_glb.exists() and out_glb.stat().st_size >= 1024:
             print(f"[{i}/{len(imgs)}] skip (done) {p.stem}")
             continue
         print(f"[{i}/{len(imgs)}] {p.stem} ...")
@@ -88,7 +89,7 @@ def main() -> None:
                 mesh = degen(mesh)
                 mesh = reducer(mesh, max_facenum=40000)
                 mesh = paint(mesh, image=img)
-            mesh.export(str(out_glb))
+            mesh.export(str(tmp_glb), file_type='glb'); tmp_glb.replace(out_glb)
             print(f"    -> {out_glb}")
         except Exception:
             traceback.print_exc()
