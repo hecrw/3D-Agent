@@ -89,7 +89,7 @@ CONTRASTS = [
 ]
 
 
-def _contrast_table(rows: list[dict], metric: str) -> None:
+def _contrast_table(rows: list[dict], metric: str, contrasts=None) -> None:
     """Mean paired difference, bootstrap 95% CI, Wilcoxon signed-rank p, and
     Holm-adjusted p across the contrasts of this metric."""
     import random
@@ -105,7 +105,7 @@ def _contrast_table(rows: list[dict], metric: str) -> None:
             continue
     prompts = sorted({p for _, p in score})
     results = []
-    for label, plus, minus in CONTRASTS:
+    for label, plus, minus in (contrasts or CONTRASTS):
         need = plus + minus
         diffs = [sum(score[(c, p)] for c in plus) - sum(score[(c, p)] for c in minus)
                  for p in prompts if all((c, p) in score for c in need)]
@@ -131,10 +131,31 @@ def _contrast_table(rows: list[dict], metric: str) -> None:
         print(f"  {label:<48} {n:>3} {md:>+10.4f}  [{lo:+.4f}, {hi:+.4f}] {p:>8.4f} {ph:>8.4f}")
 
 
+def _baseline_name(path: str) -> str | None:
+    """results_baseline_<backbone>_<mode>.csv -> 'baseline_<backbone>'."""
+    import re
+    m = re.search(r"results_baseline_(.+?)_(generated|retrieved)\.csv$", path)
+    return f"baseline_{m.group(1)}" if m else None
+
+
 def main() -> None:
-    if len(sys.argv) != 2:
-        sys.exit("usage: analyze.py <results.csv>")
+    if len(sys.argv) < 2:
+        sys.exit("usage: analyze.py <results.csv> [results_baseline_<bb>_<mode>.csv ...]")
+    # Extra CSVs are direct-backbone baselines of the SAME input arm: their rows
+    # are relabelled baseline_<backbone> so they pair with the agent per prompt.
     rows = load(sys.argv[1])
+    baselines = []
+    for path in sys.argv[2:]:
+        name = _baseline_name(path)
+        if not name:
+            sys.exit(f"not a baseline results CSV: {path}")
+        for r in load(path):
+            r["condition"] = name
+            rows.append(r)
+        baselines.append(name)
+    # agent vs each direct backbone: its own Holm family, separate from the ablations
+    base_contrasts = [(f"agent (all_on) - {b}", ["all_on"], [b]) for b in baselines] + \
+                     [(f"agent w/o restyle (raw) - {b}", ["raw"], [b]) for b in baselines]
     if not rows:
         sys.exit("no successful rows to analyze")
 
@@ -159,6 +180,9 @@ def main() -> None:
 
         print(f"\n  {label} — paired contrasts (positive = first term better)\n")
         _contrast_table(rows, col)
+        if base_contrasts:
+            print(f"\n  {label} — agent vs direct backbones (separate Holm family)\n")
+            _contrast_table(rows, col, base_contrasts)
 
 
 if __name__ == "__main__":

@@ -363,7 +363,11 @@ EOF
   echo; nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv,noheader | sed 's/^/   GPU /'
   ;;
 analyze)
-  for csv in "$RUN_DIR"/results_*.csv; do echo "### $csv"; "$PY" eval/analyze.py "$csv"; done
+  # one table per input arm: the agent conditions + that arm's direct baselines
+  for mode in generated retrieved; do
+    echo "### $mode"
+    "$PY" eval/analyze.py "$RUN_DIR/results_$mode.csv" "$RUN_DIR"/results_baseline_*_"$mode".csv
+  done
   ;;
 *) sed -n 2,26p "$0"; exit 1 ;;
 esac
