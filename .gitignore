@@ -35,6 +35,9 @@ eval/runs/**/*.npy
 eval/runs/**/*.sqlite3
 eval/runs/**/logs/
 eval/runs/**/*.views/
+eval/runs/**/*.judge_views/
+eval/runs/**/*.tmp.glb
+eval/runs/**/.inprogress
 eval/work/
 
 # Scratch dumps
