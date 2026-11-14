@@ -1,0 +1,24 @@
+{
+ "quality": 72.34083383435527,
+ "captions": [
+  "an image of a wheel on a black background",
+  "a ship's wheel on a black background",
+  "a ship's wheel on a black background",
+  "a white wheel on a black background",
+  "an image of a wheel on a black background",
+  "a black and white image of a ship's wheel",
+  "an image of a wheel on a black background",
+  "a black and white image of a steam engine on a black background",
+  "a black background with an image of a gun",
+  "a black and white image of a person riding a horse",
+  "a silhouette of a gun on a black background",
+  "a silhouette of a person standing in front of a black background"
+ ],
+ "merged": "A ship's wheel",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

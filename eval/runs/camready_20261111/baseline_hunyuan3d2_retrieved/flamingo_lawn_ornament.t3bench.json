@@ -1,0 +1,24 @@
+{
+ "quality": 40.609181793252745,
+ "captions": [
+  "a flamingo is standing on a black background",
+  "a flamingo is standing in the dark",
+  "an image of a flamingo in the dark",
+  "an illustration of a flamingo in the dark",
+  "a flamingo on a black background",
+  "an image of a flamingo in the dark",
+  "a flamingo is standing on a black background",
+  "a flamingo is standing on a black background",
+  "an image of a red candle in the dark",
+  "an image of a red light in the dark",
+  "a candle is lit in a dark room",
+  "an image of a person standing in the dark"
+ ],
+ "merged": "A flamingo",
+ "reply": "3",
+ "alignment": 3.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

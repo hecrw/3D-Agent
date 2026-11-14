@@ -1,0 +1,24 @@
+{
+ "quality": 60.90144590904576,
+ "captions": [
+  "a gold necklace with a small cross on it",
+  "a gold necklace with a small cross on it",
+  "a gold necklace with a small cross on it",
+  "a gold necklace with a small cross on it",
+  "a gold ring with a small cross on it",
+  "a gold bracelet with a small cross on it",
+  "a gold bracelet with a small cross on it",
+  "a gold bracelet with a small cross on it",
+  "a black background with a white stick in the middle",
+  "a black background with a stick in the middle",
+  "a black background with a gold bar in the middle",
+  "a dark background with a gold stick in the middle"
+ ],
+ "merged": "A gold chain jewelry piece, such as a necklace or bracelet, featuring a small cross pendant",
+ "reply": "4",
+ "alignment": 4.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

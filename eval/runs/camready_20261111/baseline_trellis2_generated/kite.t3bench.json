@@ -1,0 +1,24 @@
+{
+ "quality": 63.7799457128615,
+ "captions": [
+  "a person flying a kite in the dark",
+  "a man is flying a kite in the dark",
+  "a man holding a kite in the dark",
+  "a person flying a kite in the dark",
+  "an image of a blue and red fish in the dark",
+  "a small kite flying in the dark",
+  "a person is flying a kite in the dark",
+  "a small blue bird flying in the dark",
+  "a person holding an umbrella in the dark",
+  "an image of a jellyfish in the dark",
+  "a black background with an image of a jellyfish",
+  "an image of a flying kite in the dark"
+ ],
+ "merged": "A person flying a kite",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

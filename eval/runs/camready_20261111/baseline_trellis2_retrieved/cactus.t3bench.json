@@ -1,0 +1,24 @@
+{
+ "quality": 63.08498047772525,
+ "captions": [
+  "a cactus plant on a black background",
+  "a cactus plant is shown on a black background",
+  "a cactus plant on a black background",
+  "a cactus is shown on a black background",
+  "a green plant in the middle of a black background",
+  "a small green plant on a black background",
+  "a green plant on a black background",
+  "a green plant in a black background",
+  "a cactus is shown on a black background",
+  "a green plant on a black background",
+  "a cactus is shown on a black background",
+  "a cactus plant on a black background"
+ ],
+ "merged": "A small green cactus plant",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

@@ -1,0 +1,24 @@
+{
+ "quality": 57.327614141957596,
+ "captions": [
+  "a black and white image of a snake on a black background",
+  "an image of a snake on a black background",
+  "a pair of silver earrings on a black background",
+  "a pair of silver cufflinks on a black background",
+  "a pair of goggles on a black background",
+  "a pair of swimming goggles on a black background",
+  "a pair of goggles on a black background",
+  "a pair of goggles on a black background",
+  "a pair of glasses on a black background",
+  "a black background with a white bracelet on it",
+  "a black background with a white ring on it",
+  "a silver ring on a black background"
+ ],
+ "merged": "A pair of silver swimming goggles",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

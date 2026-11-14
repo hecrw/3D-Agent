@@ -1,0 +1,24 @@
+{
+ "quality": 58.18556294201777,
+ "captions": [
+  "a sunflower is shown on a black background",
+  "a black background with a white flower in the middle",
+  "a sunflower is shown on a black background",
+  "an image of a sunflower on a black background",
+  "a sunflower in the middle of a black background",
+  "a 3d model of a sunflower on a black background",
+  "an image of a sunflower on a black background",
+  "a 3d model of a flower on a black background",
+  "an image of a knife on a black background",
+  "a black background with a cigarette in it",
+  "a cigarette is on a black background",
+  "an image of a knife on a black background"
+ ],
+ "merged": "A 3D model of a sunflower",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

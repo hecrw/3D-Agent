@@ -1,0 +1,24 @@
+{
+ "quality": 23.885237971652003,
+ "captions": [
+  "a blue cup is sitting on a black background",
+  "a small blue ball on a black background",
+  "a blue cup on a black background",
+  "a blue spoon on a black background",
+  "an image of a blue object on a black background",
+  "3d model of a blue cup on a black background",
+  "a blue bowl with a spoon on a black background",
+  "a small blue object on a black background",
+  "a small blue glass pendant on a black background",
+  "a blue piece of paper is floating in the dark",
+  "a blue object in the middle of a black background",
+  "an image of a blue object on a black background"
+ ],
+ "merged": "a blue cup",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

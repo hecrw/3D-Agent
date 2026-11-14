@@ -1,0 +1,24 @@
+{
+ "quality": 44.148658642408776,
+ "captions": [
+  "a pair of gold shoes on a black background",
+  "a pair of gold shoes on a black background",
+  "a pair of yellow boots on a black background",
+  "a pair of yellow boots on a black background",
+  "a pair of yellow shoes on a black background",
+  "a pair of yellow flip flops on a black background",
+  "a pair of yellow footprints on a black background",
+  "a pair of yellow flip flops on a black background",
+  "a gold silhouette of a pair of boots on a black background",
+  "a silhouette of a pair of boots on a black background",
+  "a silhouette of a pair of shoes on a black background",
+  "a pair of gold ski boots on a black background"
+ ],
+ "merged": "A pair of gold boots",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

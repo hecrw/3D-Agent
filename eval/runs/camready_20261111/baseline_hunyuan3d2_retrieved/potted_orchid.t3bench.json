@@ -1,0 +1,24 @@
+{
+ "quality": 72.17768718552776,
+ "captions": [
+  "a small purple flower in a pot on a black background",
+  "a pink flower in a glass vase on a black background",
+  "a pink flower in a pot on a black background",
+  "a pink flower in a pot on a black background",
+  "a pink flower in a pot on a black background",
+  "an image of a pink flower on a black background",
+  "a black background with pink flowers in a vase",
+  "a plant in a pot on a black background",
+  "a pink flower in a pot on a black background",
+  "a pink flower in a pot on a black background",
+  "a pink flower in a pot on a black background",
+  "a pink flower and a green plant in the dark"
+ ],
+ "merged": "a pink flower in a pot",
+ "reply": "4",
+ "alignment": 4.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

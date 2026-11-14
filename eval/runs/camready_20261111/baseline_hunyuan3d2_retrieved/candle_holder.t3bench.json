@@ -1,0 +1,24 @@
+{
+ "quality": 49.31981265559372,
+ "captions": [
+  "an image of a small table with a white ball on it",
+  "a black background with a white object on it",
+  "a black and white image of a faucet on a black background",
+  "a small object with a white top on a black background",
+  "a 3d model of a small table with a lamp on it",
+  "a small gold turtle is sitting on top of a black background",
+  "a 3d model of a round table on a black background",
+  "a small round object is sitting on a black background",
+  "a black and white image of a person sitting on a chair",
+  "a small brass lamp on top of a black background",
+  "a person sitting on a chair in the dark",
+  "an image of a small table with a lamp on it"
+ ],
+ "merged": "A small table with a lamp on it",
+ "reply": "2",
+ "alignment": 2.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

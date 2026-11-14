@@ -1,0 +1,24 @@
+{
+ "quality": 33.34409093949491,
+ "captions": [
+  "an image of a person standing in front of a black background",
+  "a 3d model of a ring on a black background",
+  "a person holding a cell phone on a black background",
+  "a cell phone is sitting on top of a black background",
+  "a person holding a cell phone on a black background",
+  "a pair of brown shoes on a black background",
+  "a small object floating in the air on a black background",
+  "a small object is sitting on top of a black background",
+  "a pair of earbuds on a black background",
+  "a 3d model of a knife on a black background",
+  "a knife on a black background",
+  "a small piece of paper with a license plate on it"
+ ],
+ "merged": "A 3D model of a person holding a cell phone",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

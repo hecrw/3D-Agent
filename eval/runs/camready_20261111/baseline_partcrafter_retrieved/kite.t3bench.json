@@ -1,0 +1,24 @@
+{
+ "quality": 4.618791704391029,
+ "captions": [
+  "a black background with a purple circle in the middle",
+  "a black background with purple triangles on it",
+  "a black background with a purple triangle in the middle",
+  "a black background with a silhouette of a fish",
+  "a purple logo on a black background",
+  "a black background with a purple square in the middle",
+  "a black background with a purple square in the middle",
+  "a black background with purple letters on it",
+  "a black background with purple text on it",
+  "a black background with a purple star in the middle",
+  "a black background with purple letters on it",
+  "purple text on a black background"
+ ],
+ "merged": "A purple block or die featuring various geometric shapes, symbols, and text on each face",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

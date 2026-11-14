@@ -1,0 +1,24 @@
+{
+ "quality": 47.60175778248456,
+ "captions": [
+  "a brown and black logo on a black background",
+  "a black background with a brown logo on it",
+  "a black and brown logo on a dark background",
+  "a black background with a brown logo on it",
+  "a brown striped barrel on a black background",
+  "a brown barrel on a black background",
+  "a brown box on a black background",
+  "a brown box on a black background",
+  "an image of a brown chair on a dark background",
+  "an image of a brown teddy bear on a black background",
+  "a brown chair on a black background",
+  "a brown tiger in a hat on a black background"
+ ],
+ "merged": "A brown cylindrical or box-shaped barrel-like object, featuring dark, patterned, or logo-like markings",
+ "reply": "3",
+ "alignment": 3.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

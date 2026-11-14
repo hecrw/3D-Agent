@@ -1,0 +1,24 @@
+{
+ "quality": 43.07462030179994,
+ "captions": [
+  "a black and white image of a frying pan",
+  "a black and white image of a pan on a black background",
+  "a black and white image of a pan on a black background",
+  "a black and white image of a pot on a black background",
+  "a black and white image of a knife on a black background",
+  "a black and white image of a spoon on a black background",
+  "an image of a pot on a black background",
+  "a black and white image of a toaster on a black background",
+  "a black and white image of a cup on a black background",
+  "a black and white image of a coffee cup on a black background",
+  "a black and white image of a chair on a black background",
+  "a black and white photo of a cup of coffee"
+ ],
+ "merged": "A frying pan",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

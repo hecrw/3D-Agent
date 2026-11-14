@@ -1,0 +1,24 @@
+{
+ "quality": 50.68320622103356,
+ "captions": [
+  "a black earring with a small diamond on it",
+  "an image of a black earring on a black background",
+  "a black background with a small earring on it",
+  "a small black ear piercing on a black background",
+  "a pair of earrings with a black background",
+  "a black ring with diamonds on it",
+  "a black background with a ring on it",
+  "a black background with an image of a ring on it",
+  "an image of a hand in the dark",
+  "a black background with a candle on it",
+  "a pair of scissors on a black background",
+  "a black and white image of a hand holding a gun"
+ ],
+ "merged": "A small black earring with a diamond",
+ "reply": "2",
+ "alignment": 2.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

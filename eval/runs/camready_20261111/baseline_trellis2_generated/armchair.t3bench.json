@@ -1,0 +1,24 @@
+{
+ "quality": 47.210506687413236,
+ "captions": [
+  "an illustration of a chair with a lamp on it",
+  "an illustration of a chair and lamp on a black background",
+  "an illustration of a chair in a dark room",
+  "an illustration of a chair and lamp on a black background",
+  "an illustration of a cat sitting on a chair",
+  "a cat is sitting on a couch in a dark room",
+  "a small tan bag on a black background",
+  "an illustration of a chair on a black background",
+  "an illustration of a clock on a black background",
+  "an illustration of a chair and a lamp on a black background",
+  "an image of a person sitting on a chair in a dark room",
+  "an illustration of a chair with a lamp on it"
+ ],
+ "merged": "An illustration of a chair and a lamp",
+ "reply": "4",
+ "alignment": 4.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

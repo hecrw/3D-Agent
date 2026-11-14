@@ -1,0 +1,24 @@
+{
+ "quality": 60.83085310808617,
+ "captions": [
+  "a pair of shoes on a black background",
+  "a pair of maroon and green sneakers on a black background",
+  "a pair of red shoes on a black background",
+  "a pair of red shoes on a black background",
+  "a pair of red shoes on a black background",
+  "a pair of red shoes on a black background",
+  "a pair of green shoes on a black background",
+  "a pair of green shoes on a black background",
+  "a pair of red and green shoes on a black background",
+  "a pair of red sneakers on a black background",
+  "a pair of red and green shoes on a black background",
+  "a pair of red shoes on a black background"
+ ],
+ "merged": "A pair of red and green sneakers",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

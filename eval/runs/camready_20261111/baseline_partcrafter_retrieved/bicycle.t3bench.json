@@ -1,0 +1,24 @@
+{
+ "quality": 61.43693696913844,
+ "captions": [
+  "a bicycle is shown on a black background",
+  "a yellow bicycle on a black background",
+  "a yellow bicycle on a black background",
+  "a yellow bicycle on a black background",
+  "a gold bicycle on a black background",
+  "a gold bicycle on a black background",
+  "a yellow bicycle on a black background",
+  "a gold bicycle on a black background",
+  "a black background with a gold letter t on it",
+  "a black background with a golden logo on it",
+  "a black background with a gold object on it",
+  "an image of a yellow bicycle on a black background"
+ ],
+ "merged": "A yellow and gold bicycle",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

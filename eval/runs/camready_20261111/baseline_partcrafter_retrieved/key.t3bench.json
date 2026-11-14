@@ -1,0 +1,24 @@
+{
+ "quality": 51.578913360718275,
+ "captions": [
+  "an image of a blue key on a black background",
+  "a blue key on a black background",
+  "a black background with a blue light on it",
+  "a black background with an image of a key and a ball",
+  "an image of a man holding a gun in a dark room",
+  "an image of a man holding a hammer on a black background",
+  "a black background with a blue outline of a bird",
+  "a black background with a blue image of a person holding a chain",
+  "a blue key on a black background",
+  "an image of a key on a black background",
+  "a blue key on a black background",
+  "an image of a key on a black background"
+ ],
+ "merged": "a blue key",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

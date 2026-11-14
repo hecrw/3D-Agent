@@ -1,0 +1,24 @@
+{
+ "quality": 57.38545327263625,
+ "captions": [
+  "a diamond ring with blue sapphires on it",
+  "a diamond and sapphire ring on a black background",
+  "a diamond and sapphire ring on a black background",
+  "a diamond ring on a black background",
+  "a blue sapphire and diamond ring on a black background",
+  "a blue sapphire ring on a black background",
+  "a black ring with a diamond on it",
+  "a ring with a diamond and blue stones on a black background",
+  "a black and white picture of a ring on a black background",
+  "a blue sapphire and diamond ring on a black background",
+  "a black and white image of a ring on a black background",
+  "a blue sapphire stud on a black background"
+ ],
+ "merged": "A diamond and blue sapphire ring",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

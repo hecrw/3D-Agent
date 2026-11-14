@@ -1,0 +1,24 @@
+{
+ "quality": 72.73332675278746,
+ "captions": [
+  "an illustration of a castle in the dark",
+  "an image of a castle on a black background",
+  "a dark image of a castle in the snow",
+  "a dark image of a castle on a black background",
+  "an image of a small black and white cat on a black background",
+  "a black background with a hole in it",
+  "a black background with a hole in it",
+  "a black background with a hole in it",
+  "a black and white image of a plane flying in the sky",
+  "a small castle is sitting on top of a snowy surface",
+  "a black background with a white cat on it",
+  "a small teddy bear sitting on a black background"
+ ],
+ "merged": "a small castle",
+ "reply": "3",
+ "alignment": 3.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

@@ -1,0 +1,24 @@
+{
+ "quality": 69.04512626475255,
+ "captions": [
+  "a candelabra with candles on a black background",
+  "a candle holder on a black background",
+  "a three candle candelabra on a black background",
+  "a candelabra with candles on a black background",
+  "a black background with a circle in the middle",
+  "a black background with a circle in the middle",
+  "a brown circle on a black background",
+  "a black background with an image of a spiral",
+  "a black and white image of a circular light fixture",
+  "a candle is on top of a black background",
+  "an image of a circular light fixture on a black background",
+  "a 3d model of a candle on a black background"
+ ],
+ "merged": "A three-candle candelabra with candles",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

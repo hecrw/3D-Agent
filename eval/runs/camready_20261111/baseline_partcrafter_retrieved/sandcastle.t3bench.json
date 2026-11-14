@@ -1,0 +1,24 @@
+{
+ "quality": 8.825179895112775,
+ "captions": [
+  "a silhouette of a boat on a black background",
+  "a silhouette of a small island on a black background",
+  "a silhouette of a boat on a black background",
+  "a silhouette of a mountain on a black background",
+  "a blue silhouette of a car on a black background",
+  "a blue silhouette of a city on a black background",
+  "a blue piece of paper on a black background",
+  "a blue silhouette of a person in front of a black background",
+  "a silhouette of a boat on a black background",
+  "a black background with a blue silhouette of a person",
+  "a black background with a blue silhouette of a boat",
+  "a blue silhouette of a city on a black background"
+ ],
+ "merged": "A blue silhouette of a boat",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

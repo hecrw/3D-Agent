@@ -1,0 +1,24 @@
+{
+ "quality": 84.43024199951958,
+ "captions": [
+  "a rocking horse on a black background",
+  "a brown horse on a rocking horse on a black background",
+  "a rocking horse on a black background",
+  "a rocking horse on a black background",
+  "a brown horse on a black background",
+  "an image of a brown horse on a black background",
+  "a horse on a rocking horse on a black background",
+  "a silhouette of a horse on a black background",
+  "an image of a chair on a black background",
+  "an image of a horse standing on a black background",
+  "a 3d rendering of a chair in a dark room",
+  "a black and white image of a chair in the dark"
+ ],
+ "merged": "A brown rocking horse",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

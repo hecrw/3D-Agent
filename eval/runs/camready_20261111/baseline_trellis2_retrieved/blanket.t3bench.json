@@ -1,0 +1,24 @@
+{
+ "quality": 41.4993304950778,
+ "captions": [
+  "a black background with a piece of wood on it",
+  "a black background with a piece of metal on it",
+  "a black background with a white object in the air",
+  "a black and white image of a knife on a black background",
+  "a white towel on a black background",
+  "a white cloth sitting on top of a black background",
+  "a small piece of stone on a black background",
+  "a piece of paper on a black background",
+  "a black background with a piece of paper on it",
+  "a white towel on a black background",
+  "a black and white image of a rock on a black background",
+  "a white cloth on top of a black background"
+ ],
+ "merged": "A small, folded white cloth or piece of paper with an irregular, stone-like shape",
+ "reply": "3",
+ "alignment": 3.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

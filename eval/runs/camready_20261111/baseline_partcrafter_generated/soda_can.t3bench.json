@@ -1,0 +1,24 @@
+{
+ "quality": 53.944514026418254,
+ "captions": [
+  "a purple can sitting on a black background",
+  "a purple can on a black background",
+  "a purple can on a black background",
+  "a purple can on a black background",
+  "a purple dot on a black background",
+  "a purple circle on a black background",
+  "a purple object on a black background",
+  "a purple circle on a black background",
+  "a purple cylinder on a black background",
+  "a purple cup sitting on a black background",
+  "a purple nail polish bottle on a black background",
+  "a purple cup on a black background"
+ ],
+ "merged": "a purple can",
+ "reply": "4",
+ "alignment": 4.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

@@ -1,0 +1,24 @@
+{
+ "quality": 41.05938176667921,
+ "captions": [
+  "a black background with a red line in the middle",
+  "a red airplane flying in the dark",
+  "a black background with a red light in the sky",
+  "a person standing in the dark with a red light",
+  "a person is standing in the dark with a red light",
+  "a person is standing in the dark with a red light",
+  "a man holding a red knife in the dark",
+  "a black background with a red light in the middle",
+  "a red light in the dark",
+  "a black background with a red and white snake",
+  "a red lizard on a black background",
+  "a red light in the dark"
+ ],
+ "merged": "A person holding a red lightsaber",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

@@ -1,0 +1,24 @@
+{
+ "quality": 25.6909831847576,
+ "captions": [
+  "an image of a flower in a pot on a black background",
+  "an image of a flower on a black background",
+  "the logo of a plant in a pot on a black background",
+  "a plant in a pot on a black background",
+  "an image of a bird flying on a black background",
+  "a black background with a brown bird on it",
+  "an image of a bird on a black background",
+  "a bird is flying on a black background",
+  "a black background with an image of a bird on it",
+  "the logo of a flower on a black background",
+  "the logo of a plant on a black background",
+  "a silhouette of a butterfly on a black background"
+ ],
+ "merged": "A potted plant and a bird",
+ "reply": "3",
+ "alignment": 3.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

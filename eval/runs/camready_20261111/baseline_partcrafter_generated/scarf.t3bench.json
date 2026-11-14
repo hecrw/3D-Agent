@@ -1,0 +1,24 @@
+{
+ "quality": 6.39340517510864,
+ "captions": [
+  "a purple brush on a black background",
+  "a black background with a purple paint splatter",
+  "a black background with purple paint on it",
+  "a black background with purple paint on it",
+  "a purple outline of the state of alaska on a black background",
+  "a purple silhouette of a person in front of a black background",
+  "a purple square on a black background",
+  "a purple map on a black background",
+  "a purple map on a black background",
+  "nebraska png - nebraska png - nebraska png -",
+  "a purple logo on a black background",
+  "a silhouette of a purple car on a black background"
+ ],
+ "merged": "A purple paint splatter map outline",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

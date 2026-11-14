@@ -1,0 +1,24 @@
+{
+ "quality": 64.06650161145572,
+ "captions": [
+  "a candle holder on a black background",
+  "a small candle stand on a black background",
+  "a black background with a candlestick on it",
+  "a candlestick on a black background",
+  "a brown lamp on a black background",
+  "an image of a candle on a black background",
+  "a small ring on a black background",
+  "a small metal object on a black background",
+  "a metal candle holder on a black background",
+  "a candle holder on a black background",
+  "an image of a small frog on a black background",
+  "a candle holder is shown on a black background"
+ ],
+ "merged": "A small metal candle holder",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

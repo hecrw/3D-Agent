@@ -1,0 +1,24 @@
+{
+ "quality": 71.26538160455857,
+ "captions": [
+  "an image of a chandelier on a black background",
+  "a gold and white chandelier on a black background",
+  "an image of a chandelier on a black background",
+  "an image of a chandelier on a black background",
+  "a gold and white chandelier on a black background",
+  "a small chandelier is sitting on top of a black background",
+  "a black background with an image of a chandelier",
+  "an image of a chandelier in a dark room",
+  "an image of a chandelier on a black background",
+  "a chandelier is hanging in the dark on a black background",
+  "a black and white image of a chandelier",
+  "a white and gold chandelier in a dark room"
+ ],
+ "merged": "A gold and white chandelier",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

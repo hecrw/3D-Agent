@@ -1,0 +1,24 @@
+{
+ "quality": 5.860688512596383,
+ "captions": [
+  "a silhouette of a woman in a brown dress",
+  "a silhouette of a woman walking in the dark",
+  "a silhouette of a woman in a brown dress",
+  "a silhouette of a woman in a brown dress",
+  "a brown stick on a black background",
+  "a silhouette of a person with a hat on a black background",
+  "a silhouette of a person standing in front of a black background",
+  "an image of a brown object on a black background",
+  "a silhouette of a lion on a black background",
+  "a silhouette of a person standing on a black background",
+  "a brown silhouette of a person standing in front of a black background",
+  "a black background with a brown silhouette of a person"
+ ],
+ "merged": "a silhouette of a woman in a brown dress",
+ "reply": "2",
+ "alignment": 2.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

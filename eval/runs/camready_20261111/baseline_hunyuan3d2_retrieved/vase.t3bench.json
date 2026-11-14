@@ -1,0 +1,24 @@
+{
+ "quality": 59.12820672165182,
+ "captions": [
+  "a vase with a sunflower painted on it",
+  "a white vase with a yellow flower on it",
+  "a white and green vase on a black background",
+  "a vase with a yellow and green flower on it",
+  "a white vase with a green flower on it",
+  "a vase with a yellow flower on it",
+  "3d model of a green and white bottle on a black background",
+  "a 3d model of a green bottle on a black background",
+  "a 3d model of a vase on a black background",
+  "a white and green vase on a black background",
+  "a white vase with a green leaf on it",
+  "a small white and green vase on a black background"
+ ],
+ "merged": "A white vase painted with a yellow sunflower and green leaves",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

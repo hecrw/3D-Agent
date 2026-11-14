@@ -1,0 +1,24 @@
+{
+ "quality": 31.144646246743672,
+ "captions": [
+  "a pair of brown shoes on a black background",
+  "a cigarette on a black background",
+  "a cat laying down on a black background",
+  "a cat sleeping on a black background",
+  "a cat laying down on a black background",
+  "an image of a brown dog on a black background",
+  "a brown teddy bear on a black background",
+  "a black background with an image of a brown dog",
+  "a brown dog is standing on a black background",
+  "an image of a piece of chocolate on a black background",
+  "an image of a brown cat on a black background",
+  "a brown dog laying down on a black background"
+ ],
+ "merged": "a brown dog",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

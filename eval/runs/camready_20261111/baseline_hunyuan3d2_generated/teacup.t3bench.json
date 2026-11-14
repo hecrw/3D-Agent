@@ -1,0 +1,24 @@
+{
+ "quality": 62.47233753105711,
+ "captions": [
+  "a coffee cup and saucer on a black background",
+  "a cup and saucer on a black background",
+  "a tea cup and saucer on a black background",
+  "a cup and saucer on a black background",
+  "a cup of tea on a saucer on a black background",
+  "a cup of tea on a black background",
+  "an image of a small brown circle on a black background",
+  "a tan circle on a black background",
+  "an image of a light fixture on a black background",
+  "a cup of tea on a saucer on a black background",
+  "an image of a ceiling light in a dark room",
+  "a cup of tea on a saucer on a black background"
+ ],
+ "merged": "A cup of tea and a saucer",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

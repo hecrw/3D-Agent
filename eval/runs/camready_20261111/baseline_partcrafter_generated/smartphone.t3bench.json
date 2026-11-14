@@ -1,0 +1,24 @@
+{
+ "quality": 13.702953114756475,
+ "captions": [
+  "a purple arrow on a black background",
+  "a purple arrow on a black background",
+  "a purple arrow on a black background",
+  "a purple arrow on a black background",
+  "an image of a purple triangle on a black background",
+  "a purple logo on a black background",
+  "a purple rectangle on a black background",
+  "a purple rectangle on a black background",
+  "a purple circle in the middle of a black background",
+  "a purple square on a black background",
+  "a purple cup on a black background",
+  "a purple circle in the middle of a black background"
+ ],
+ "merged": "A purple 3D arrow",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

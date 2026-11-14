@@ -1,0 +1,24 @@
+{
+ "quality": 31.555703543597225,
+ "captions": [
+  "a green cowboy hat on a black background",
+  "a green hat on a black background",
+  "a green silhouette of a hat on a black background",
+  "a green truck on a black background",
+  "a green outline of the state of massachusetts on a black background",
+  "a green rectangle on a black background",
+  "a green square on a black background",
+  "a green outline of the state of texas on a black background",
+  "a green square on a black background",
+  "a green silhouette of a bird on a black background",
+  "a green map on a black background",
+  "a green silhouette of a person on a black background"
+ ],
+ "merged": "A green cowboy hat",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

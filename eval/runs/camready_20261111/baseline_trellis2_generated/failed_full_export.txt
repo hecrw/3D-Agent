@@ -1,0 +1,2 @@
+flag	timeout>900s
+smartphone	timeout>900s

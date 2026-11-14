@@ -1,0 +1,24 @@
+{
+ "quality": 70.95514016723726,
+ "captions": [
+  "3d model of a sunflower on a black background",
+  "a sunflower is sitting on a black background",
+  "a sunflower is shown on a black background",
+  "a yellow sunflower on a black background",
+  "a yellow flower on a black background",
+  "a brown ball sitting on top of a black background",
+  "a yellow flower is sitting on a black background",
+  "a brown egg sitting on top of a black background",
+  "3d model of a lion's head on a black background",
+  "a yellow flower on a black background",
+  "a 3d model of a dragon ring on a black background",
+  "a 3d model of an egg on a black background"
+ ],
+ "merged": "A 3D model of a yellow sunflower",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

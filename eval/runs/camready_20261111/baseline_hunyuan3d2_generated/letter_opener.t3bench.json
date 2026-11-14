@@ -1,0 +1,24 @@
+{
+ "quality": 18.236101178586924,
+ "captions": [
+  "a 3d model of a bat on a black background",
+  "an image of a brown dragon on a black background",
+  "an image of a brown dragon on a black background",
+  "an image of a bat on a black background",
+  "a brown octopus on a black background",
+  "a 3d model of a brown dragon on a black background",
+  "a brown and white cat on a black background",
+  "a brown and white deer on a black background",
+  "a brown dragon on a black background",
+  "a brown dragon is sitting on top of a black background",
+  "an image of a brown bird on a black background",
+  "a brown dragon sitting on a black background"
+ ],
+ "merged": "A 3D model of a brown dragon",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

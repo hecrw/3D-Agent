@@ -1,0 +1,24 @@
+{
+ "quality": 38.85964544333703,
+ "captions": [
+  "an orange cat laying down on a black background",
+  "a black background with a brown cat on it",
+  "a brown cat is sitting on a black background",
+  "an orange cat laying down on a black background",
+  "a cat lying down on a black background",
+  "a cat is laying down on a black background",
+  "a brown giraffe is standing on a black background",
+  "a cat is sleeping on a black background",
+  "a black background with a brown object on it",
+  "a cat laying down on a black background",
+  "a cat laying down on a black background",
+  "a brown bird flying in the air on a black background"
+ ],
+ "merged": "An orange cat",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

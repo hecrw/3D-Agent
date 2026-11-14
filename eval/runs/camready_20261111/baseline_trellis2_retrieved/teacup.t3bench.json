@@ -1,0 +1,24 @@
+{
+ "quality": 61.558267899020905,
+ "captions": [
+  "a small cup and saucer on a black background",
+  "a small tea cup and saucer on a black background",
+  "a small cup and saucer on a black background",
+  "a small tea cup and saucer on a black background",
+  "a cup of coffee and saucer on a black background",
+  "a cup of tea with a saucer on a black background",
+  "a white and gold pendant with a small circle in the middle",
+  "a small round object on a black background",
+  "a tea cup and saucer with a bird on it",
+  "a tea cup and saucer on a black background",
+  "a teacup and saucer on a black background",
+  "a tea cup and saucer on a black background"
+ ],
+ "merged": "A small teacup and saucer",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

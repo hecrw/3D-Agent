@@ -1,0 +1,24 @@
+{
+ "quality": 68.56838826651244,
+ "captions": [
+  "a red light in the dark with a black background",
+  "a guitar in the dark with a red light on it",
+  "a red light in the dark with a black background",
+  "a black background with a red light in the middle",
+  "a red electric guitar on a black background",
+  "a red electric guitar on a black background",
+  "a red guitar in a black background",
+  "a red guitar on a black background",
+  "an image of a red guitar in the dark",
+  "a red light bulb in a dark room",
+  "a red light bulb on a black background",
+  "a red guitar on a black background"
+ ],
+ "merged": "a red electric guitar",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

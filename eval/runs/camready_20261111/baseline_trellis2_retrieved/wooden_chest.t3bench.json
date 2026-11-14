@@ -1,0 +1,24 @@
+{
+ "quality": 27.45609792432702,
+ "captions": [
+  "a brown box sitting on a black background",
+  "a black and white picture of a small wooden box",
+  "a black screen with an image of a dog",
+  "a dark room with a wooden table in the middle",
+  "a small brown box on a black background",
+  "a small wooden box on a black background",
+  "a dark image of a small object on a black background",
+  "a small brown box is sitting on the ground in the dark",
+  "a small wooden box in the dark",
+  "an image of a brown bag on a black background",
+  "a black and white image of a dog in the dark",
+  "a small brown object on a black background"
+ ],
+ "merged": "a small brown wooden box",
+ "reply": "4",
+ "alignment": 4.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

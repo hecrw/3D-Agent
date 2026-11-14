@@ -1,0 +1,24 @@
+{
+ "quality": 42.07266328286152,
+ "captions": [
+  "a small key and a pink ball on a black background",
+  "an image of a key on a black background",
+  "a small key with a pink ball on a black background",
+  "a key is sitting on a black background",
+  "a black background with a cup of coffee on it",
+  "a black background with a cup of coffee on it",
+  "a black background with a purple object in the middle",
+  "a black background with the letter l on it",
+  "an image of a knife on a black background",
+  "a black screen with a light in the middle",
+  "a black background with a small pink ball on it",
+  "a black background with a purple ball on it"
+ ],
+ "merged": "A small key with a pink ball",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

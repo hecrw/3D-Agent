@@ -1,0 +1,24 @@
+{
+ "quality": 13.101329400310014,
+ "captions": [
+  "a blue line on a black background",
+  "an image of a blue line on a black background",
+  "a blue line on a black background",
+  "an image of a blue line on a black background",
+  "a black background with a blue line on it",
+  "a blue line on a black background",
+  "an image of a blue line on a black background",
+  "a black background with a blue line on it",
+  "a black background with a blue line on it",
+  "a blue line drawn on a black background",
+  "a blue line drawn on a black background",
+  "a black background with a blue line drawn on it"
+ ],
+ "merged": "a blue line",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

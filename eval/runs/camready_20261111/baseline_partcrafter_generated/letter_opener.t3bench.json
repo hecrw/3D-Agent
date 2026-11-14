@@ -1,0 +1,24 @@
+{
+ "quality": 9.821949855463387,
+ "captions": [
+  "a purple silhouette of a boat on a black background",
+  "a purple logo on a black background",
+  "a purple silhouette of a car on a black background",
+  "a purple silhouette of a car on a black background",
+  "the state of alabama in purple on a black background",
+  "a purple piece of paper in front of a black background",
+  "a purple folder icon on a black background",
+  "a purple piece of paper on a black background",
+  "the state of washington in purple on a black background",
+  "a black background with a purple logo on it",
+  "a purple logo on a black background",
+  "a purple silhouette of the state of oregon on a black background"
+ ],
+ "merged": "A purple icon or flat silhouette cutout",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

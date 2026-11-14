@@ -1,0 +1,24 @@
+{
+ "quality": 6.104958075939507,
+ "captions": [
+  "a blue silhouette of a state on a black background",
+  "a blue silhouette of a cat on a black background",
+  "a map of kenya in blue on a black background",
+  "a blue silhouette of the state of texas on a black background",
+  "a silhouette of a cat in blue on a black background",
+  "a blue square on a black background",
+  "a blue shape is shown on a black background",
+  "a blue object on a black background",
+  "a blue speech bubble on a black background",
+  "a blue silhouette of a map on a black background",
+  "a blue outline of a map on a black background",
+  "a blue outline of the state of pennsylvania on a black background"
+ ],
+ "merged": "A blue silhouette of a map",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

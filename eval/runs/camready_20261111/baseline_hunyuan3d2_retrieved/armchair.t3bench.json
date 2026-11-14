@@ -1,0 +1,24 @@
+{
+ "quality": 53.60567859458159,
+ "captions": [
+  "a wooden chair is sitting on a black background",
+  "a wooden chair in a dark room",
+  "an image of a wooden chair on a black background",
+  "a chair is sitting on a black background",
+  "an image of a chair on a black background",
+  "a chair in a dark room",
+  "an image of a wooden chair on a black background",
+  "a wooden chair on a black background",
+  "a wooden chair is sitting on a black background",
+  "a small wooden chair on a black background",
+  "an image of a wooden chair on a black background",
+  "a small wooden chair with a lock on it"
+ ],
+ "merged": "A small wooden chair",
+ "reply": "3",
+ "alignment": 3.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

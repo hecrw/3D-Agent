@@ -1,0 +1,24 @@
+{
+ "quality": 71.41441996425033,
+ "captions": [
+  "a small boat is floating in the water on a dark night",
+  "an image of a mountain on a dark background",
+  "an image of a mountain in the dark",
+  "an image of a large pile of sand in the middle of a field",
+  "a 3d model of a large rock in the middle of a black background",
+  "a 3d model of a small building",
+  "a 3d model of a small building",
+  "a map of a small island in the middle of the ocean",
+  "a 3d model of a ship on a black background",
+  "a 3d model of a castle on a black background",
+  "a 3d model of a ship in the dark",
+  "a 3d model of a space ship on a black background"
+ ],
+ "merged": "A 3D model of a small rocky island with a castle",
+ "reply": "3",
+ "alignment": 3.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

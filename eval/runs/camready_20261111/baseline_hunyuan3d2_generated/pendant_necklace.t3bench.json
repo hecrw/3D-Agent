@@ -1,0 +1,24 @@
+{
+ "quality": 39.33368728317834,
+ "captions": [
+  "a brown disc on a black background",
+  "a brown circle on a black background",
+  "a blue stone in a silver filigree ring",
+  "a silver ring with a blue sapphire in the center",
+  "a blue sapphire and diamond ring on a black background",
+  "a circular light fixture on a black background",
+  "a gold and sapphire ring on a black background",
+  "a brown circular disc on a black background",
+  "a silver ring with a blue stone on a black background",
+  "a silver and blue ring on a black background",
+  "a silver ring with blue sapphires on a black background",
+  "a white and blue cell phone on a black background"
+ ],
+ "merged": "A silver ring featuring a blue sapphire center stone and filigree details",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

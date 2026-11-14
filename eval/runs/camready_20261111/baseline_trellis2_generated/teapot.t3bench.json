@@ -1,0 +1,24 @@
+{
+ "quality": 76.16570581249098,
+ "captions": [
+  "a small teapot on a black background",
+  "a small teapot on a black background",
+  "a small pink teapot on a black background",
+  "a small pink teapot on a black background",
+  "a black background with a white sphere on it",
+  "a white ball is sitting on a black background",
+  "a small round object in the middle of a black background",
+  "a small pink ball on a black background",
+  "a pink teapot on a black background",
+  "a white teapot on a black background",
+  "an image of a teapot on a black background",
+  "a white teapot on a black background"
+ ],
+ "merged": "A small pink teapot",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

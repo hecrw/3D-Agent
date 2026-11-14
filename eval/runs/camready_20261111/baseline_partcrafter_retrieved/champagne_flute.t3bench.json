@@ -1,0 +1,24 @@
+{
+ "quality": 10.233070357818221,
+ "captions": [
+  "a green glass is sitting on top of a black background",
+  "a green glass on a black background",
+  "a blue glass on a black background",
+  "a green glass with a black background",
+  "an image of a light bulb on a black background",
+  "a light bulb on a black background",
+  "the silhouette of a frog on a black background",
+  "a silhouette of a violin on a black background",
+  "a silhouette of a glass on a black background",
+  "a small cup sitting on top of a black background",
+  "a silhouette of a chess piece on a black background",
+  "a green cup on a black background"
+ ],
+ "merged": "a green glass",
+ "reply": "2",
+ "alignment": 2.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

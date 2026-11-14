@@ -1,0 +1,24 @@
+{
+ "quality": 70.47174596418677,
+ "captions": [
+  "a pair of purple sunglasses on a black background",
+  "a pair of sunglasses on a black background",
+  "a pair of blue and white eyeglasses on a black background",
+  "a blue and white fish in a black background",
+  "a pair of swimming goggles on a black background",
+  "a pair of glasses on a black background",
+  "a pair of glasses on a black background",
+  "a pair of swimming goggles on a black background",
+  "a pair of glasses on a black background",
+  "a black background with a purple ring on it",
+  "a black background with a purple ring on it",
+  "a purple and white bracelet on a black background"
+ ],
+ "merged": "A pair of purple and blue swimming goggles",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

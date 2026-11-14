@@ -1,0 +1,24 @@
+{
+ "quality": 80.11859186073318,
+ "captions": [
+  "a can with a red, blue and white design on it",
+  "a can of beer on a black background",
+  "a can of red, white and blue paint on a black background",
+  "a can of beer with a blue and white design on it",
+  "a can of red bull on a black background",
+  "a can of soda on a black background",
+  "a glass tube with a blue and red design on it",
+  "a glass bottle with a red, blue and white design on it",
+  "a red, white and blue bottle on a black background",
+  "a can of energy drink on a black background",
+  "a glass bottle with a painting on it",
+  "a can with red, blue and white paint on it"
+ ],
+ "merged": "A can of Red Bull energy drink with a red, blue, and white design",
+ "reply": "4",
+ "alignment": 4.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

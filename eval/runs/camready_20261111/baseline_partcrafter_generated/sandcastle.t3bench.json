@@ -1,0 +1,24 @@
+{
+ "quality": 12.88894660271292,
+ "captions": [
+  "a silhouette of a castle on a black background",
+  "a silhouette of a castle on a black background",
+  "the silhouette of a castle on a black background",
+  "a silhouette of a castle on a black background",
+  "a black background with a silhouette of a person",
+  "a black background with a silhouette of a person",
+  "a black background with a silhouette of a dog",
+  "a silhouette of a person in front of a black background",
+  "a silhouette of a castle on a black background",
+  "a silhouette of a castle on a black background",
+  "a black background with a silhouette of a tree",
+  "a silhouette of a castle on a black background"
+ ],
+ "merged": "A silhouette of a castle",
+ "reply": "2",
+ "alignment": 2.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

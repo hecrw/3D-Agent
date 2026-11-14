@@ -1,0 +1,24 @@
+{
+ "quality": 9.397222981856089,
+ "captions": [
+  "an image of a red train on a black background",
+  "an image of a red chair on a black background",
+  "an image of a red horse on a black background",
+  "a red and white logo on a black background",
+  "a red and black logo on a black background",
+  "a red logo on a black background",
+  "a black background with a red logo on it",
+  "a red folder icon on a black background",
+  "a black background with a red logo on it",
+  "a black background with a red logo on it",
+  "a red silhouette of a chair on a black background",
+  "a silhouette of a cat on a black background"
+ ],
+ "merged": "A red logo",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

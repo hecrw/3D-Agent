@@ -1,0 +1,24 @@
+{
+ "quality": 40.00871185369,
+ "captions": [
+  "a hand holding a red cell phone on a black background",
+  "a hand holding a red phone on a black background",
+  "a hand holding a cell phone on a black background",
+  "a hand holding a cell phone with a message on it",
+  "a hand holding a cell phone on a black background",
+  "a cartoon image of a pig on a black background",
+  "a hand holding a cell phone on a black background",
+  "a hand holding a red shoe on a black background",
+  "a cactus on a black background",
+  "an image of a hand holding a stick in front of a black background",
+  "a black background with a wooden hand in the air",
+  "a cactus is on a black background"
+ ],
+ "merged": "A hand holding a red cell phone",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

@@ -1,0 +1,24 @@
+{
+ "quality": 53.316189615604394,
+ "captions": [
+  "a 3d model of a kangaroo on a black background",
+  "a 3d model of a raccoon in the dark",
+  "a cat is standing on a black background",
+  "a cat is standing on a black background",
+  "a cat is standing on a black background",
+  "a brown cat is standing in the dark",
+  "a cat laying down on a black background",
+  "3d model of a cat on a black background",
+  "a brown horse is standing in the dark",
+  "a cat is standing in the dark with its back to the camera",
+  "an image of a cat sitting on a black background",
+  "a 3d rendering of a cat in the dark"
+ ],
+ "merged": "a 3D model of a brown cat",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

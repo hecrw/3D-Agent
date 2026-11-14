@@ -1,0 +1,24 @@
+{
+ "quality": 34.97562731146465,
+ "captions": [
+  "a red and white pillow on a black background",
+  "an image of a red and white rug on a black background",
+  "a red and white rug on a black background",
+  "an image of a red and white rug on a black background",
+  "a red and white pillow on a black background",
+  "a red and white pillow in the dark",
+  "a red and white rug in the dark",
+  "an image of a red and white rug in the dark",
+  "a black background with a red line in the middle",
+  "a black background with a red line in the middle",
+  "a black and white image of a person in a dark room",
+  "a black background with a red line in the middle"
+ ],
+ "merged": "A red and white rug",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

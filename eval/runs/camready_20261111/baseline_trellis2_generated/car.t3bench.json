@@ -1,0 +1,24 @@
+{
+ "quality": 60.691879261991026,
+ "captions": [
+  "porsche 911 carrera gt3 rs gt3 rs gt3 rs gt",
+  "an image of a car in the dark",
+  "porsche 911 gt3 rs gt3 rs gt3 rs gt3 r",
+  "porsche 911 gt3 rs - 3d model",
+  "a 3d model of a car on a black background",
+  "a 3d model of a blue car on a black background",
+  "an image of a car in the dark",
+  "a black and white image of a car in the dark",
+  "a car is sitting on top of a black background",
+  "a white sports car on a black background",
+  "a silver sports car sitting on top of a black background",
+  "a small white car on a black background"
+ ],
+ "merged": "A Porsche 911 GT3 RS sports car",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

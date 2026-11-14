@@ -1,0 +1,24 @@
+{
+ "quality": 61.835521955053935,
+ "captions": [
+  "a gold bracelet with a cross on it",
+  "a gold bracelet with a small cross on it",
+  "a gold bracelet with a small cross on it",
+  "a gold cross on a black background",
+  "a gold bracelet with a small cross on it",
+  "a gold rat on a black background",
+  "a black background with a bird sitting on a branch",
+  "a gold necklace with a small cross on it",
+  "a black background with a line drawing of a bird",
+  "the letter s is drawn on a black background",
+  "a black background with a gold line in the middle",
+  "a black background with a line drawing of a bird"
+ ],
+ "merged": "A gold bracelet featuring a small cross",
+ "reply": "2",
+ "alignment": 2.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

@@ -1,0 +1,24 @@
+{
+ "quality": 28.95927540878281,
+ "captions": [
+  "a black background with a candle on it",
+  "a black background with a candle on it",
+  "a black background with a candle on it",
+  "a black background with a candle in the middle",
+  "a candle is lit on a black background",
+  "a candle is lit on a black background",
+  "a candle is lit on a black background",
+  "a candle is lit on a black background",
+  "a black background with a candle in the middle",
+  "a black background with an orange light in the middle",
+  "a black background with an orange candle in the middle",
+  "a black background with a single candle in the middle"
+ ],
+ "merged": "A lit orange candle",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

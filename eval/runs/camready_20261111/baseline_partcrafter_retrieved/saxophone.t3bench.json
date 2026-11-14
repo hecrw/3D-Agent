@@ -1,0 +1,24 @@
+{
+ "quality": 52.020621162832896,
+ "captions": [
+  "a black background with a green tree in the middle",
+  "a black background with a green light in the middle",
+  "a black background with a green light in the sky",
+  "a black background with a green tree in the middle",
+  "an image of a green gun on a black background",
+  "a green saxophone is shown on a black background",
+  "a green saxophone on a black background",
+  "a black background with a green light in the middle",
+  "a black background with a green pipe in the middle",
+  "a black background with a green plant in the middle",
+  "a black background with a green arrow in the middle",
+  "a green arrow on a black background"
+ ],
+ "merged": "A green tree-shaped neon light",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

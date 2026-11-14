@@ -1,0 +1,24 @@
+{
+ "quality": 4.688400536399072,
+ "captions": [
+  "a pink paint splatter on a black background",
+  "a pink flower on a black background",
+  "a pink flower on a black background",
+  "a pink flower on a black background",
+  "an image of a pink flower on a black background",
+  "a pink flower on a black background",
+  "a pink flower on a black background",
+  "a pink flower on a black background",
+  "a pink splat on a black background",
+  "a pink splatter on a black background",
+  "an image of a pink flower on a black background",
+  "a pink paint splatter on a black background"
+ ],
+ "merged": "a pink flower shape resembling a paint splatter",
+ "reply": "2",
+ "alignment": 2.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

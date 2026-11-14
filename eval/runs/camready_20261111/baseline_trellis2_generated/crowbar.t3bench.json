@@ -1,0 +1,24 @@
+{
+ "quality": 36.708431381701246,
+ "captions": [
+  "a knife on a black background",
+  "a cigar is sitting in a dark room",
+  "a white ring in the dark with a black background",
+  "a knife sitting on a black background",
+  "a wooden hammer on a black background",
+  "a wooden hammer on a black background",
+  "a wooden hammer on a black background",
+  "a wooden hammer on a black background",
+  "a wooden knife on a black background",
+  "a hammer on a black background",
+  "a wooden axe on a black background",
+  "a horn on a black background"
+ ],
+ "merged": "A wooden hammer",
+ "reply": "1",
+ "alignment": 1.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

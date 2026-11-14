@@ -1,0 +1,7 @@
+chess_set	timeout>480s
+flag	timeout>480s
+letter_opener	timeout>480s
+lipstick	timeout>480s
+mug	timeout>480s
+smartphone	timeout>480s
+wreath	timeout>480s

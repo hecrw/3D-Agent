@@ -1,0 +1,24 @@
+{
+ "quality": 56.75549849957122,
+ "captions": [
+  "a beer mug on a black background",
+  "a beer mug on a black background",
+  "a brown paper cup on a black background",
+  "a coffee mug on a black background",
+  "an image of a coffee cup on a black background",
+  "a coffee cup icon on a black background",
+  "a cup of coffee on a black background",
+  "a coffee mug icon on a black background",
+  "an image of a piece of bread on a black background",
+  "a black background with a tan object on it",
+  "a black and white image of a piece of bread",
+  "a cup of coffee on a black background"
+ ],
+ "merged": "A coffee mug or cup",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

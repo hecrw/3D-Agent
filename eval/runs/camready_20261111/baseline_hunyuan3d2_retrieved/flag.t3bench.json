@@ -1,0 +1,24 @@
+{
+ "quality": 66.07923857903921,
+ "captions": [
+  "an american flag waving in the wind on a black background",
+  "an american flag waving in the wind on a black background",
+  "an american flag waving in the wind on a black background",
+  "an american flag waving in the wind on a black background",
+  "an american flag waving in the wind on a black background",
+  "an american flag on a black background",
+  "an american flag waving in the wind on a black background",
+  "an american flag waving in the wind on a black background",
+  "a red and white flag on a black background",
+  "an american flag blowing in the wind on a black background",
+  "an american flag on a black background",
+  "a red, white, and blue flag on a black background"
+ ],
+ "merged": "an American flag",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

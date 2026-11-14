@@ -1,0 +1,24 @@
+{
+ "quality": 56.27567558926648,
+ "captions": [
+  "a green mug on a black background",
+  "a green mug on a black background",
+  "a green mug on a black background",
+  "a green coffee mug on a black background",
+  "a green cup of coffee on a black background",
+  "a green cup of coffee on a black background",
+  "a 3d model of a green mug on a black background",
+  "a green cup on a black background",
+  "a green mug sitting on a black background",
+  "a green coffee cup on a black background",
+  "a green cup on a black background",
+  "a green coffee cup on a black background"
+ ],
+ "merged": "a green coffee mug",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

@@ -1,0 +1,24 @@
+{
+ "quality": 59.30388184631763,
+ "captions": [
+  "a blue bike on a black background",
+  "a blue bicycle on a black background",
+  "a black background with a blue bicycle on it",
+  "a blue bicycle on a black background",
+  "a blue bicycle is shown on a black background",
+  "an image of a blue bicycle on a black background",
+  "a blue bike is shown on a black background",
+  "a blue bicycle on a black background",
+  "a black background with the letter t in the middle",
+  "a blue syringe on a black background",
+  "a blue light in the dark with a black background",
+  "a green light in the dark with a black background"
+ ],
+ "merged": "A blue bicycle",
+ "reply": "5",
+ "alignment": 5.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}

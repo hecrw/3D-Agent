@@ -1,0 +1,24 @@
+{
+ "quality": 5.045964944157973,
+ "captions": [
+  "a yellow circle on a black background",
+  "a white circle on a black background",
+  "a yellow circle on a black background",
+  "a white circle on a black background",
+  "a white egg on a black background",
+  "a white circle on a black background",
+  "a yellow circle on a black background",
+  "a white circle on a black background",
+  "a black background with a white circle on it",
+  "the letter d on a black background",
+  "a black background with a white circle on it",
+  "a black background with an image of a banana"
+ ],
+ "merged": "A yellow and white sphere",
+ "reply": "2",
+ "alignment": 2.0,
+ "t3bench_commit": "6367462cfd04467af772c168c5cd8570964b9df3",
+ "llm": "gemini-3.8-flash",
+ "captioner": "Salesforce/blip2-flan-t5-xxl",
+ "seed": 20261111
+}
