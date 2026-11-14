@@ -57,6 +57,14 @@ from render3d import render_turntable  # noqa: E402
 JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gemini-3.8-flash")
 SEED = int(os.environ.get("GEMINI_SEED", "20261111") or 0)
 N_VIEWS, ELEVATION = 4, 20.0
+# Judge settings, logged in every row's `model` column. Defaults = the original
+# judge (3.8 Flash, LOW thinking, default image resolution) -> model="gemini-3.8-flash".
+# Cheaper judge for the remaining calls, e.g.:
+#   JUDGE_MODEL=gemini-3.1-flash-lite JUDGE_THINKING=MINIMAL JUDGE_MEDIA_RES=LOW
+JUDGE_THINKING = os.environ.get("JUDGE_THINKING", "LOW").upper()     # MINIMAL|LOW|MEDIUM|HIGH|OFF
+JUDGE_MEDIA_RES = os.environ.get("JUDGE_MEDIA_RES", "").upper()      # ""(default)|LOW|MEDIUM|HIGH
+JUDGE_CONFIG = (JUDGE_MODEL if (JUDGE_MODEL == "gemini-3.8-flash" and JUDGE_THINKING == "LOW" and not JUDGE_MEDIA_RES)
+                else f"{JUDGE_MODEL}|thinking={JUDGE_THINKING}|media={JUDGE_MEDIA_RES or 'default'}")
 AXES = ("appearance", "surface", "text_fidelity")
 BASELINES = ("trellis2", "hunyuan3d2", "partcrafter")
 LOO = ("background", "framing", "view", "lighting", "isolation", "part_visibility")
@@ -149,7 +157,10 @@ def ask(client, axis: str, prompt: str, imgs_1: list[str], imgs_2: list[str]) ->
     # a few tokens can return an EMPTY answer. Low thinking keeps cost down.
     cfg = types.GenerateContentConfig(
         temperature=0.0, seed=SEED,
-        thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW))
+        media_resolution=(getattr(types.MediaResolution, f"MEDIA_RESOLUTION_{JUDGE_MEDIA_RES}")
+                          if JUDGE_MEDIA_RES else None),
+        thinking_config=(None if JUDGE_THINKING == "OFF" else types.ThinkingConfig(
+            thinking_level=getattr(types.ThinkingLevel, JUDGE_THINKING))))
     for attempt in range(5):
         try:
             resp = client.models.generate_content(model=JUDGE_MODEL, contents=parts, config=cfg)
@@ -173,6 +184,8 @@ def judge(run_dir: Path, workers: int) -> Path:
     done = set()
     if out.exists():
         for r in csv.DictReader(open(out)):
+            # judgments already made are kept whatever judge made them (the
+            # judge is recorded per row in `model`)
             if r["choice"] in ("1", "2", "same"):
                 done.add((r["mode"], r["prompt"], r["sys_a"], r["sys_b"], r["order"], r["axis"]))
 
@@ -230,7 +243,7 @@ def judge(run_dir: Path, workers: int) -> Path:
             if choice:
                 winner = (a if choice == "1" else b) if order == "ab" else (b if choice == "1" else a)
             return dict(mode=mode, prompt=prompt, sys_a=a, sys_b=b, order=order, axis=axis,
-                        choice=choice, winner=winner, raw=raw, model=JUDGE_MODEL,
+                        choice=choice, winner=winner, raw=raw, model=JUDGE_CONFIG,
                         mesh_a=ma, mesh_b=mb, ts=time.strftime("%Y-%m-%dT%H:%M:%S"))
 
         with ThreadPoolExecutor(max_workers=workers) as ex:
