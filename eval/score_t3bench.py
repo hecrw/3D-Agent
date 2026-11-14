@@ -129,7 +129,10 @@ class Models:
             from dotenv import load_dotenv
             from google import genai
             load_dotenv(REPO / ".env")
-            self.gem = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            self.gem = genai.Client(api_key=os.environ["GEMINI_API_KEY"],
+            # a call that never returns otherwise blocks the run forever; with a
+            # 120 s timeout it raises and the retry loop tries again
+            http_options=genai.types.HttpOptions(timeout=120_000))
 
     def caption(self, img) -> str:
         t = self.torch
