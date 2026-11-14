@@ -54,17 +54,15 @@ sys.path.insert(0, str(EVAL_DIR))
 
 from render3d import render_turntable  # noqa: E402
 
-JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gemini-3.8-flash")
+# Pairwise judge, pinned (separate from JUDGE_MODEL, which rerun_all.sh exports
+# for the per-mesh VLM score and T3Bench). Flash-Lite with minimal thinking and
+# low image resolution: ~2k input tokens and no thinking tokens per call.
+JUDGE_MODEL = os.environ.get("PAIR_JUDGE_MODEL", "gemini-3.1-flash-lite")
 SEED = int(os.environ.get("GEMINI_SEED", "20261111") or 0)
 N_VIEWS, ELEVATION = 4, 20.0
-# Judge settings, logged in every row's `model` column. Defaults = the original
-# judge (3.8 Flash, LOW thinking, default image resolution) -> model="gemini-3.8-flash".
-# Cheaper judge for the remaining calls, e.g.:
-#   JUDGE_MODEL=gemini-3.1-flash-lite JUDGE_THINKING=MINIMAL JUDGE_MEDIA_RES=LOW
-JUDGE_THINKING = os.environ.get("JUDGE_THINKING", "LOW").upper()     # MINIMAL|LOW|MEDIUM|HIGH|OFF
-JUDGE_MEDIA_RES = os.environ.get("JUDGE_MEDIA_RES", "").upper()      # ""(default)|LOW|MEDIUM|HIGH
-JUDGE_CONFIG = (JUDGE_MODEL if (JUDGE_MODEL == "gemini-3.8-flash" and JUDGE_THINKING == "LOW" and not JUDGE_MEDIA_RES)
-                else f"{JUDGE_MODEL}|thinking={JUDGE_THINKING}|media={JUDGE_MEDIA_RES or 'default'}")
+JUDGE_THINKING = os.environ.get("PAIR_JUDGE_THINKING", "MINIMAL").upper()   # MINIMAL|LOW|MEDIUM|HIGH|OFF
+JUDGE_MEDIA_RES = os.environ.get("PAIR_JUDGE_MEDIA_RES", "LOW").upper()    # ""(default)|LOW|MEDIUM|HIGH
+JUDGE_CONFIG = f"{JUDGE_MODEL}|thinking={JUDGE_THINKING}|media={JUDGE_MEDIA_RES or 'default'}"
 AXES = ("appearance", "surface", "text_fidelity")
 BASELINES = ("trellis2", "hunyuan3d2", "partcrafter")
 LOO = ("background", "framing", "view", "lighting", "isolation", "part_visibility")
@@ -184,9 +182,9 @@ def judge(run_dir: Path, workers: int) -> Path:
     done = set()
     if out.exists():
         for r in csv.DictReader(open(out)):
-            # judgments already made are kept whatever judge made them (the
-            # judge is recorded per row in `model`)
-            if r["choice"] in ("1", "2", "same"):
+            # resume only from judgments made by THIS judge config (identical-
+            # mesh ties need no call, so they count for any config)
+            if r["choice"] == "same" or (r["choice"] in ("1", "2") and r["model"] == JUDGE_CONFIG):
                 done.add((r["mode"], r["prompt"], r["sys_a"], r["sys_b"], r["order"], r["axis"]))
 
     jobs, same = [], []
