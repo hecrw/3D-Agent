@@ -86,7 +86,7 @@ def main() -> None:
     for i, p in enumerate(imgs, 1):
         out_glb = out_dir / f"{p.stem}.glb"
         tmp_glb = out_glb.with_suffix('.tmp.glb')
-        if out_glb.exists() and out_glb.stat().st_size >= 1024:
+        if out_glb.is_file() and out_glb.stat().st_size >= 1024:
             print(f"[{i}/{len(imgs)}] skip (done) {p.stem}")
             continue
         if p.stem in failed:

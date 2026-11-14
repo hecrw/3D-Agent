@@ -119,6 +119,13 @@ class Models:
             self.proc = Blip2Processor.from_pretrained(BLIP2)
             self.blip = Blip2ForConditionalGeneration.from_pretrained(
                 BLIP2, torch_dtype=torch.float16).to(self.dev).eval()
+            # transformers>=4.46 splices the 32 Q-Former outputs into <image>
+            # placeholder tokens. With images only (no text) the processor adds
+            # none and generate() fails ("shape [131072] ... indexing result of
+            # shape [0]"). Captioning with text="" makes the processor prepend
+            # the placeholders: the T5 encoder then sees [32 query embeds, </s>],
+            # exactly LAVIS blip2_t5 unconditional captioning (prompt="").
+            self.proc.num_query_tokens = self.blip.config.num_query_tokens
             from dotenv import load_dotenv
             from google import genai
             load_dotenv(REPO / ".env")
@@ -126,7 +133,11 @@ class Models:
 
     def caption(self, img) -> str:
         t = self.torch
-        inputs = self.proc(images=img, return_tensors="pt").to(self.dev, t.float16)
+        inputs = self.proc(images=img, text="", return_tensors="pt").to(self.dev, t.float16)
+        itok = getattr(self.blip.config, "image_token_index", None)
+        if itok is not None:
+            n = int((inputs["input_ids"] == itok).sum())
+            assert n == self.blip.config.num_query_tokens, f"{n} image tokens in BLIP-2 input"
         with t.no_grad():
             out = self.blip.generate(**inputs, do_sample=True, top_p=0.9, temperature=1.0,
                                      num_beams=5, max_new_tokens=30, min_length=1,
@@ -224,6 +235,7 @@ def main() -> None:
         try:
             if need_q and "quality" not in c:
                 c["quality"] = quality(models, mesh, prompt)
+                cache_path(mesh).write_text(json.dumps(c, indent=1))
             if need_a and "alignment" not in c:
                 c.update(alignment(models, tpl, mesh, prompt))
             c.update(t3bench_commit=T3_COMMIT, llm=JUDGE_MODEL, captioner=BLIP2, seed=SEED)

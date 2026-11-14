@@ -56,6 +56,7 @@ export AGENT_LLM_MODEL="${AGENT_LLM_MODEL:-gemini-3.8-flash}"
 export JUDGE_MODEL="${JUDGE_MODEL:-gemini-3.8-flash}"
 export OPENCV_IO_ENABLE_OPENEXR=1
 export SKIP_INLINE_ULIP=1   # ULIP-2 is scored locally by the `ulip` stage instead
+export PYTHONUNBUFFERED=1   # progress lines reach the tee'd logs immediately, not in 8 KB bursts
 export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.6}"   # A6000 / 3090 = Ampere sm_86
 # Headless Linux box: pyrender (CLIP/judge/T3Bench renders) must use EGL.
 if [ "$(uname)" = Linux ] && [ -z "${DISPLAY:-}" ]; then export PYOPENGL_PLATFORM="${PYOPENGL_PLATFORM:-egl}"; fi
